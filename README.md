@@ -5,12 +5,14 @@
 </p>
 
 <p align="center">
-  Control your audio equalizers directly from a drawing tablet.
+  Control your audio equalizers directly from a drawing tablet or your mouse.
 </p>
 
 <p align="center">
-  StylusDeck turns vertical pen movement into immediate, expressive control: drag the pen up and down to shape volume or EQ bands, or switch to Hover mode to adjust levels without pressing the pen down at all.
+  StylusDeck turns vertical movement into immediate, expressive control: drag up and down to shape volume or EQ bands, or switch to Hover mode to adjust levels without pressing down at all.
 </p>
+
+> For the smoothest experience, use `Hover` mode, move between Volume / Low / Mid / High with `1`, `2`, `3`, `4`, and press `C` any time you want to snap the current control back to center. That combination feels especially seamless on both a mouse and a tablet.
 
 <p align="center">
   <img src="assets/screenshots/volume-window.png" alt="StylusDeck volume control screen" width="100%">
@@ -34,9 +36,22 @@ StylusDeck is a macOS-native control surface for volume and three EQ bands:
 
 It is designed for drawing tablets, pen displays, and macro-driven setups where fast, absolute control matters more than tiny knobs or traditional mixer UI.
 
+You can also use it comfortably with a mouse. Hover mode works remarkably well with both the mouse and the tablet, and it makes fast EQ moves feel unusually fluid.
+
+## Recommended Workflow
+
+For most people, the best setup is:
+
+- leave StylusDeck in `Hover` mode
+- use `1`, `2`, `3`, `4` to jump between Volume, Low, Mid, and High
+- use `C` as your instant center-value macro whenever you want to reset the current lane back to `50`
+
+That flow keeps your hands moving without friction and makes the app feel much more like an instrument than a traditional mixer.
+
 ## Why It Feels Good To Use
 
 - Absolute vertical control. Higher on the tablet means more; lower means less.
+- Mouse support for the same direct vertical workflow when you are not on a tablet.
 - Drag mode for deliberate, tactile movement.
 - Hover mode for pressure-free adjustment with the pen floating above the surface.
 - Native low-latency audio processing with live monitor output and OBS capture routing.
@@ -77,10 +92,7 @@ If macOS is currently set to use `BlackHole 2ch` as the live output device, Styl
 
 ## Controls
 
-- `1` switches to Volume
-- `2` switches to Low
-- `3` switches to Mid
-- `4` switches to High
+- `1`, `2`, `3`, `4` switch instantly between Volume, Low, Mid, and High
 - `C` centers the current route at `50`
 - `F` toggles fullscreen
 - `Mode` switches between Drag and Hover
