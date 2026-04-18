@@ -1,0 +1,699 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Field Control</title>
+    <style>
+      :root {
+        --bg-top: #071018;
+        --bg-bottom: #010203;
+        --text-main: #f4f7f7;
+        --text-dim: rgba(244, 247, 247, 0.58);
+        --accent: #6ff0c2;
+        --accent-soft: rgba(111, 240, 194, 0.24);
+        --accent-glow: rgba(111, 240, 194, 0.44);
+        --line-y: 50vh;
+        --value-ratio: 0.5;
+        --control-top: 88px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        font-family: "SF Pro Display", "Segoe UI", sans-serif;
+        background: #000;
+        color: var(--text-main);
+        user-select: none;
+        -webkit-user-select: none;
+        touch-action: none;
+        cursor: crosshair;
+      }
+
+      body {
+        position: relative;
+        background:
+          radial-gradient(circle at 12% 84%, var(--accent-soft), transparent 32%),
+          radial-gradient(circle at 88% 12%, rgba(255, 255, 255, 0.12), transparent 18%),
+          linear-gradient(160deg, var(--bg-top), var(--bg-bottom) 70%);
+      }
+
+      body::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          linear-gradient(
+            to bottom,
+            transparent 0%,
+            rgba(255, 255, 255, 0.025) 48%,
+            transparent 100%
+          );
+        opacity: 0.7;
+        pointer-events: none;
+      }
+
+      .safe-band {
+        position: absolute;
+        inset: 0 0 auto 0;
+        height: var(--control-top);
+        background: linear-gradient(180deg, rgba(0, 0, 0, 0.46), rgba(0, 0, 0, 0));
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        pointer-events: none;
+      }
+
+      .line {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: var(--line-y);
+        height: 2px;
+        background: linear-gradient(90deg, transparent, var(--accent), transparent);
+        box-shadow: 0 0 28px var(--accent-glow);
+        transform: translateY(-50%);
+        transition: top 45ms linear, opacity 120ms ease;
+      }
+
+      .line::after {
+        content: "";
+        position: absolute;
+        right: min(4vw, 28px);
+        top: 50%;
+        width: 18px;
+        height: 18px;
+        border-radius: 999px;
+        background: var(--accent);
+        transform: translateY(-50%);
+        box-shadow: 0 0 24px var(--accent-glow);
+      }
+
+      .shell {
+        position: relative;
+        z-index: 1;
+        width: 100%;
+        height: 100%;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 24px;
+        padding: 28px 34px;
+      }
+
+      .copy {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        min-width: 0;
+      }
+
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+      }
+
+      .eyebrow {
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.28em;
+        color: var(--text-dim);
+      }
+
+      .hero-head {
+        margin-bottom: 10px;
+      }
+
+      .nav {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: end;
+      }
+
+      .nav-link,
+      button {
+        appearance: none;
+        border: 0;
+        border-radius: 999px;
+        padding: 12px 18px;
+        background: rgba(255, 255, 255, 0.1);
+        color: var(--text-main);
+        font: inherit;
+        font-weight: 700;
+        letter-spacing: 0.01em;
+        cursor: pointer;
+        text-decoration: none;
+        transition: transform 140ms ease, background 140ms ease, color 140ms ease;
+      }
+
+      .nav-link:hover,
+      button:hover {
+        transform: translateY(-1px);
+        background: rgba(255, 255, 255, 0.16);
+      }
+
+      .nav-link.active,
+      button.primary {
+        background: var(--accent);
+        color: #03130d;
+      }
+
+      .hero {
+        max-width: 760px;
+      }
+
+      .value {
+        margin: 0;
+        font-size: clamp(5rem, 18vw, 13rem);
+        line-height: 0.88;
+        letter-spacing: -0.05em;
+        font-weight: 900;
+      }
+
+      .subcopy {
+        margin: 18px 0 0;
+        max-width: 28ch;
+        font-size: clamp(1rem, 2.6vw, 1.7rem);
+        line-height: 1.2;
+        color: rgba(244, 247, 247, 0.82);
+      }
+
+      .meta {
+        margin-top: 16px;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-dim);
+      }
+
+      .rail {
+        align-self: center;
+        width: min(8vw, 64px);
+        height: min(72vh, 620px);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
+      .rail-track {
+        position: relative;
+        width: 2px;
+        height: 100%;
+        background: rgba(255, 255, 255, 0.14);
+      }
+
+      .rail-track::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        bottom: calc(var(--value-ratio) * 100%);
+        width: 26px;
+        height: 26px;
+        border-radius: 999px;
+        background: var(--accent);
+        transform: translate(-50%, 50%);
+        box-shadow: 0 0 26px var(--accent-glow);
+        transition: bottom 45ms linear, width 100ms ease, height 100ms ease;
+      }
+
+      body.dragging .rail-track::after {
+        width: 32px;
+        height: 32px;
+      }
+
+      body.hovering .rail-track::after {
+        width: 30px;
+        height: 30px;
+      }
+
+      .footer {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        align-items: end;
+        color: var(--text-dim);
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .actions {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+        justify-content: start;
+      }
+
+      .status {
+        min-width: 100px;
+        text-align: right;
+      }
+
+      @media (max-width: 860px) {
+        .shell {
+          grid-template-columns: 1fr;
+          padding: 22px;
+        }
+
+        .header,
+        .footer {
+          flex-direction: column;
+          align-items: start;
+        }
+
+        .nav,
+        .actions {
+          justify-content: start;
+        }
+
+        .rail {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body tabindex="-1">
+    <div class="safe-band" aria-hidden="true"></div>
+    <div class="line" aria-hidden="true"></div>
+    <main class="shell">
+      <section class="copy">
+        <header class="header">
+          <div class="actions">
+            <button id="mode" data-ui-control>Mode: Drag</button>
+            <button class="primary" id="fullscreen" data-ui-control>Fullscreen</button>
+            <button id="secondary" data-ui-control>Center</button>
+          </div>
+          <nav class="nav">
+            <a class="nav-link" data-ui-control href="/volume">Volume</a>
+            <a class="nav-link" data-ui-control href="/eq/low">Low</a>
+            <a class="nav-link" data-ui-control href="/eq/mid">Mid</a>
+            <a class="nav-link" data-ui-control href="/eq/high">High</a>
+          </nav>
+        </header>
+
+        <div class="hero">
+          <div class="eyebrow hero-head" id="eyebrow">VOLUME</div>
+          <h1 class="value" id="value">50%</h1>
+          <p class="subcopy" id="subcopy"></p>
+          <div class="meta" id="meta"></div>
+        </div>
+
+        <footer class="footer">
+          <div id="range-note"></div>
+          <div class="status" id="status">Ready</div>
+        </footer>
+      </section>
+
+      <aside class="rail" aria-hidden="true">
+        <div class="rail-track"></div>
+      </aside>
+    </main>
+
+    <script>
+      const PAGES = {
+        "/volume": {
+          path: "/volume",
+          key: "volume",
+          eyebrow: "VOLUME",
+          title: "volume",
+          accent: "#6ff0c2",
+          accentSoft: "rgba(111, 240, 194, 0.24)",
+          accentGlow: "rgba(111, 240, 194, 0.44)",
+          rangeText: "Absolute Y position controls MacBook output volume below the top safe band.",
+          dragText: "Drag anywhere below the top safe band to raise output volume. Drag down to lower it.",
+          hoverText: "Hover anywhere below the top safe band to raise or lower output volume.",
+          metaText: "Path: Master",
+          stateUrl: "/api/volume/state",
+          setUrl: "/api/volume",
+          resetLabel: "Center",
+          resetValue: 50,
+        },
+        "/eq/low": {
+          path: "/eq/low",
+          key: "low",
+          eyebrow: "LOW BAND",
+          title: "low",
+          accent: "#ff9b6b",
+          accentSoft: "rgba(255, 155, 107, 0.24)",
+          accentGlow: "rgba(255, 155, 107, 0.44)",
+          rangeText: "Absolute Y position controls the low EQ band below the top safe band.",
+          dragText: "Drag anywhere below the top safe band to boost or cut the low band.",
+          hoverText: "Hover anywhere below the top safe band to boost or cut the low band.",
+          metaText: "Band: Low",
+          stateUrl: "/api/eq/low/state",
+          setUrl: "/api/eq/low",
+          resetLabel: "Center",
+          resetValue: 50,
+        },
+        "/eq/mid": {
+          path: "/eq/mid",
+          key: "mid",
+          eyebrow: "MID BAND",
+          title: "mid",
+          accent: "#f3d86e",
+          accentSoft: "rgba(243, 216, 110, 0.24)",
+          accentGlow: "rgba(243, 216, 110, 0.44)",
+          rangeText: "Absolute Y position controls the mid EQ band below the top safe band.",
+          dragText: "Drag anywhere below the top safe band to boost or cut the mid band.",
+          hoverText: "Hover anywhere below the top safe band to boost or cut the mid band.",
+          metaText: "Band: Mid",
+          stateUrl: "/api/eq/mid/state",
+          setUrl: "/api/eq/mid",
+          resetLabel: "Center",
+          resetValue: 50,
+        },
+        "/eq/high": {
+          path: "/eq/high",
+          key: "high",
+          eyebrow: "HIGH BAND",
+          title: "high",
+          accent: "#7ab9ff",
+          accentSoft: "rgba(122, 185, 255, 0.24)",
+          accentGlow: "rgba(122, 185, 255, 0.44)",
+          rangeText: "Absolute Y position controls the high EQ band below the top safe band.",
+          dragText: "Drag anywhere below the top safe band to boost or cut the high band.",
+          hoverText: "Hover anywhere below the top safe band to boost or cut the high band.",
+          metaText: "Band: High",
+          stateUrl: "/api/eq/high/state",
+          setUrl: "/api/eq/high",
+          resetLabel: "Center",
+          resetValue: 50,
+        },
+      };
+      const KEY_ROUTES = {
+        "1": "/volume",
+        "2": "/eq/low",
+        "3": "/eq/mid",
+        "4": "/eq/high",
+      };
+
+      const valueEl = document.getElementById("value");
+      const eyebrowEl = document.getElementById("eyebrow");
+      const subcopyEl = document.getElementById("subcopy");
+      const rangeNoteEl = document.getElementById("range-note");
+      const metaEl = document.getElementById("meta");
+      const statusEl = document.getElementById("status");
+      const modeButton = document.getElementById("mode");
+      const fullscreenButton = document.getElementById("fullscreen");
+      const secondaryButton = document.getElementById("secondary");
+
+      let currentValue = 50;
+      let currentPath = normalizePath(window.location.pathname);
+      let currentPage = PAGES[currentPath];
+      let dragging = false;
+      let hoverMode = false;
+      let pendingValue = null;
+      let lastSentValue = null;
+      let sending = false;
+      let currentBackend = currentPage.key === "volume" ? "coreaudio" : "mock";
+      let currentConnected = currentPage.key === "volume";
+      let routeVersion = 0;
+
+      const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+      function normalizePath(pathname) {
+        if (pathname === "/") return "/volume";
+        return PAGES[pathname] ? pathname : "/volume";
+      }
+
+      function isInteractiveTarget(target) {
+        return target instanceof Element && target.closest("[data-ui-control]");
+      }
+
+      function restoreMacroFocus() {
+        if (document.activeElement instanceof HTMLElement && document.activeElement !== document.body) {
+          document.activeElement.blur();
+        }
+        document.body.focus({ preventScroll: true });
+      }
+
+      function controlBounds() {
+        const top = clamp(Math.round(window.innerHeight * 0.1), 64, 120);
+        const height = Math.max(window.innerHeight - top, 1);
+        document.documentElement.style.setProperty("--control-top", `${top}px`);
+        return { top, height, bottom: top + height };
+      }
+
+      function lineYForValue(value) {
+        const { top, height } = controlBounds();
+        return top + (1 - value / 100) * height;
+      }
+
+      function applyTheme() {
+        document.documentElement.style.setProperty("--accent", currentPage.accent);
+        document.documentElement.style.setProperty("--accent-soft", currentPage.accentSoft);
+        document.documentElement.style.setProperty("--accent-glow", currentPage.accentGlow);
+        eyebrowEl.textContent = currentPage.eyebrow;
+        rangeNoteEl.textContent = currentPage.rangeText;
+        secondaryButton.textContent = currentPage.resetLabel;
+        document.title = `${currentPage.eyebrow} · Field Control`;
+        document.querySelectorAll(".nav-link").forEach((link) => {
+          link.classList.toggle("active", link.getAttribute("href") === currentPage.path);
+        });
+      }
+
+      function setUiValue(value, statusText = null) {
+        currentValue = clamp(Math.round(value), 0, 100);
+        const ratio = currentValue / 100;
+        document.documentElement.style.setProperty("--value-ratio", ratio.toFixed(4));
+        document.documentElement.style.setProperty("--line-y", `${lineYForValue(currentValue)}px`);
+        valueEl.textContent = `${currentValue}%`;
+        if (statusText) statusEl.textContent = statusText;
+      }
+
+      function renderMeta(detail = "") {
+        const connection = currentConnected ? currentBackend.toUpperCase() : `${currentBackend.toUpperCase()} · NOT WIRED`;
+        metaEl.textContent = detail ? `${currentPage.metaText} · ${connection} · ${detail}` : `${currentPage.metaText} · ${connection}`;
+      }
+
+      function syncModeUi() {
+        modeButton.textContent = `Mode: ${hoverMode ? "Hover" : "Drag"}`;
+        subcopyEl.textContent = hoverMode ? currentPage.hoverText : currentPage.dragText;
+        if (!dragging) {
+          statusEl.textContent = hoverMode ? "Hover ready" : "Drag ready";
+        }
+      }
+
+      async function fetchState() {
+        const version = routeVersion;
+        const response = await fetch(currentPage.stateUrl, { cache: "no-store" });
+        const data = await response.json();
+        if (version !== routeVersion) return;
+        currentBackend = data.backend || currentBackend;
+        currentConnected = Boolean(data.connected);
+        setUiValue(data.value, hoverMode ? "Hover ready" : "Drag ready");
+        renderMeta(data.detail || "");
+      }
+
+      async function pushValue(value) {
+        const version = routeVersion;
+        pendingValue = value;
+        setUiValue(value, "Live");
+        if (sending) return;
+
+        sending = true;
+        while (pendingValue !== null) {
+          const next = pendingValue;
+          pendingValue = null;
+
+          if (next === lastSentValue) {
+            continue;
+          }
+
+          const response = await fetch(currentPage.setUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ value: next }),
+          });
+          const data = await response.json();
+          if (version !== routeVersion) {
+            continue;
+          }
+          currentBackend = data.backend || currentBackend;
+          currentConnected = Boolean(data.connected);
+          renderMeta(data.detail || "");
+          lastSentValue = next;
+        }
+        sending = false;
+      }
+
+      function valueFromPointer(event) {
+        const { top, height } = controlBounds();
+        const ratio = 1 - clamp((event.clientY - top) / height, 0, 1);
+        return Math.round(ratio * 100);
+      }
+
+      function pointerInsideControl(event) {
+        const { top, bottom } = controlBounds();
+        return event.clientY >= top && event.clientY <= bottom;
+      }
+
+      function beginDrag(event) {
+        if (isInteractiveTarget(event.target)) return;
+        if (hoverMode) return;
+        dragging = true;
+        document.body.classList.add("dragging");
+        event.preventDefault();
+        if (event.pointerId !== undefined) {
+          document.body.setPointerCapture(event.pointerId);
+        }
+        pushValue(valueFromPointer(event));
+      }
+
+      function moveDrag(event) {
+        if (isInteractiveTarget(event.target)) {
+          document.body.classList.remove("hovering");
+          if (!dragging) {
+            statusEl.textContent = hoverMode ? "Hover ready" : "Drag ready";
+          }
+          return;
+        }
+
+        if (hoverMode) {
+          if (!pointerInsideControl(event)) {
+            document.body.classList.remove("hovering");
+            statusEl.textContent = "Hover ready";
+            return;
+          }
+          document.body.classList.add("hovering");
+          pushValue(valueFromPointer(event));
+          return;
+        }
+
+        if (!dragging) return;
+        event.preventDefault();
+        pushValue(valueFromPointer(event));
+      }
+
+      function endDrag(event) {
+        if (hoverMode) {
+          document.body.classList.remove("hovering");
+          statusEl.textContent = "Hover ready";
+          return;
+        }
+
+        if (!dragging) return;
+        dragging = false;
+        document.body.classList.remove("dragging");
+        if (event.pointerId !== undefined && document.body.hasPointerCapture(event.pointerId)) {
+          document.body.releasePointerCapture(event.pointerId);
+        }
+        statusEl.textContent = "Drag ready";
+      }
+
+      async function navigateTo(path, options = {}) {
+        const normalizedPath = normalizePath(path);
+        if (!options.force && normalizedPath === currentPath) return;
+
+        currentPath = normalizedPath;
+        currentPage = PAGES[currentPath];
+        routeVersion += 1;
+        const version = routeVersion;
+        dragging = false;
+        pendingValue = null;
+        lastSentValue = null;
+        sending = false;
+        currentBackend = currentPage.key === "volume" ? "coreaudio" : "mock";
+        currentConnected = currentPage.key === "volume";
+        document.body.classList.remove("dragging");
+        document.body.classList.remove("hovering");
+
+        const historyFn = options.replace ? "replaceState" : "pushState";
+        window.history[historyFn]({}, "", currentPath);
+
+        applyTheme();
+        syncModeUi();
+        renderMeta("");
+        statusEl.textContent = "Loading";
+
+        try {
+          await fetchState();
+        } catch {
+          if (version === routeVersion) {
+            statusEl.textContent = "Server error";
+          }
+        }
+
+        restoreMacroFocus();
+      }
+
+      document.body.addEventListener("pointerdown", beginDrag);
+      document.body.addEventListener("pointermove", moveDrag, { passive: false });
+      document.body.addEventListener("pointerrawupdate", moveDrag, { passive: false });
+      document.body.addEventListener("pointerup", endDrag);
+      document.body.addEventListener("pointercancel", endDrag);
+      document.body.addEventListener("pointerleave", endDrag);
+
+      modeButton.addEventListener("click", () => {
+        hoverMode = !hoverMode;
+        dragging = false;
+        document.body.classList.remove("dragging");
+        document.body.classList.remove("hovering");
+        syncModeUi();
+        restoreMacroFocus();
+      });
+
+      fullscreenButton.addEventListener("click", async () => {
+        if (!document.fullscreenElement) {
+          await document.documentElement.requestFullscreen();
+        }
+        statusEl.textContent = "Fullscreen";
+        restoreMacroFocus();
+      });
+
+      secondaryButton.addEventListener("click", () => {
+        pushValue(currentPage.resetValue);
+        restoreMacroFocus();
+      });
+
+      document.querySelectorAll(".nav-link").forEach((link) => {
+        link.addEventListener("click", (event) => {
+          event.preventDefault();
+          navigateTo(link.getAttribute("href"));
+        });
+      });
+
+      window.addEventListener("keydown", async (event) => {
+        if (KEY_ROUTES[event.key]) {
+          event.preventDefault();
+          navigateTo(KEY_ROUTES[event.key]);
+          return;
+        }
+
+        if (event.key.toLowerCase() === "f") {
+          await document.documentElement.requestFullscreen();
+          statusEl.textContent = "Fullscreen";
+          restoreMacroFocus();
+          return;
+        }
+
+        if (event.key.toLowerCase() === "c") {
+          event.preventDefault();
+          pushValue(currentPage.resetValue);
+          restoreMacroFocus();
+        }
+      });
+
+      document.addEventListener("fullscreenchange", restoreMacroFocus);
+
+      window.addEventListener("popstate", () => {
+        navigateTo(window.location.pathname, { replace: true, force: true });
+      });
+
+      window.addEventListener("resize", () => {
+        setUiValue(currentValue);
+      });
+
+      restoreMacroFocus();
+      navigateTo(currentPath, { replace: true, force: true });
+    </script>
+  </body>
+</html>
