@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  StylusDeck turns vertical movement into immediate, expressive control: drag up and down to shape volume or EQ bands, or switch to Hover mode to adjust levels without pressing down at all.
+  StylusDeck turns vertical movement into immediate, expressive control with absolute positioning: higher on the surface means more, lower means less, whether you are using a stylus or a mouse.
 </p>
 
 > For the smoothest experience, use `Hover` mode, move between Volume / Low / Mid / High with `1`, `2`, `3`, `4`, and press `C` any time you want to snap the current control back to center. That combination feels especially seamless on both a mouse and a tablet.
@@ -36,7 +36,7 @@ StylusDeck is a macOS-native control surface for volume and three EQ bands:
 
 It is designed for drawing tablets, pen displays, and macro-driven setups where fast, absolute control matters more than tiny knobs or traditional mixer UI.
 
-You can also use it comfortably with a mouse. Hover mode works remarkably well with both the mouse and the tablet, and it makes fast EQ moves feel unusually fluid.
+You can also use it comfortably with a mouse. Both the mouse and the stylus use absolute vertical positioning rather than relative movement, so your hand position maps directly to the current value. Hover mode works remarkably well with both input methods, and it makes fast EQ moves feel unusually fluid.
 
 ## Recommended Workflow
 
@@ -50,7 +50,7 @@ That flow keeps your hands moving without friction and makes the app feel much m
 
 ## Why It Feels Good To Use
 
-- Absolute vertical control. Higher on the tablet means more; lower means less.
+- Absolute vertical control. Both mouse and stylus use absolute positioning, so higher means more and lower means less.
 - Mouse support for the same direct vertical workflow when you are not on a tablet.
 - Drag mode for deliberate, tactile movement.
 - Hover mode for pressure-free adjustment with the pen floating above the surface.
