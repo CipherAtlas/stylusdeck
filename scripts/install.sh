@@ -135,6 +135,10 @@ cd "$REPO_ROOT"
 swift build --product StylusDeck --product VolumeBridge --product EqBridge
 add_report "Native targets" "built" "The primary deliverable is the native StylusDeck app. The bridge binaries are also built so the optional web UI can be used later without another compile step." "Built StylusDeck, VolumeBridge, and EqBridge in .build/debug."
 
+log "Installing Finder app"
+APP_BUNDLE_PATH="$("$REPO_ROOT/scripts/install-app.sh")"
+add_report "Finder app" "installed" "Creates a local macOS app bundle so StylusDeck can be launched from Finder, Spotlight, or the Dock without rerunning shell commands." "Installed at $APP_BUNDLE_PATH."
+
 print_report
 
 cat <<'EOF'
@@ -143,6 +147,7 @@ Setup complete.
 
 Next:
 - The launcher will now start the native StylusDeck app.
+- You can also open StylusDeck from ~/Applications in Finder.
 - OBS should use BlackHole 2ch as its audio input device.
 - If you want the browser-based secondary UI later, run ./scripts/run-web.sh.
 

@@ -50,12 +50,15 @@ That single command will:
 - install Homebrew if needed
 - install `BlackHole 2ch` if needed
 - build the native app and audio bridge binaries
+- install `StylusDeck.app` into `~/Applications`
 - print a readable setup report explaining what was installed, why it was needed, and how audio routing works
 - launch the native `StylusDeck` app
 
 If macOS prompts for Xcode Command Line Tools, finish that install and rerun `./start.sh`.
 
 If `BlackHole 2ch` is installed for the first time and macOS has not activated it yet, reboot once and run `./start.sh` again.
+
+After that first setup run, you can launch `StylusDeck.app` directly from Finder at `~/Applications/StylusDeck.app` instead of using the terminal command again.
 
 ## Audio Routing
 
