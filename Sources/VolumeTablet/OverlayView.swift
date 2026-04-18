@@ -260,6 +260,8 @@ final class ControlSurfaceView: NSView {
 
     private let actionsStack = NSStackView()
     private let navStack = NSStackView()
+    private let brandMarkView = NSImageView()
+    private let brandNameLabel = NSTextField(labelWithString: "StylusDeck")
     private let modeButton = PillButton()
     private let fullscreenButton = PillButton()
     private let centerButton = PillButton()
@@ -295,6 +297,7 @@ final class ControlSurfaceView: NSView {
 
         setupButtons()
         setupLabels()
+        setupBranding()
         installSubviews()
         refreshFromState()
 
@@ -471,7 +474,7 @@ final class ControlSurfaceView: NSView {
     }
 
     private func setupLabels() {
-        [eyebrowLabel, valueLabel, subcopyLabel, metaLabel, rangeNoteLabel, statusLabel].forEach { label in
+        [brandNameLabel, eyebrowLabel, valueLabel, subcopyLabel, metaLabel, rangeNoteLabel, statusLabel].forEach { label in
             label.isBordered = false
             label.drawsBackground = false
             label.isEditable = false
@@ -479,6 +482,7 @@ final class ControlSurfaceView: NSView {
             addSubview(label)
         }
 
+        brandNameLabel.textColor = NSColor.white.withAlphaComponent(0.9)
         eyebrowLabel.textColor = NSColor.white.withAlphaComponent(0.62)
         valueLabel.textColor = .white
         subcopyLabel.textColor = NSColor.white.withAlphaComponent(0.82)
@@ -492,6 +496,13 @@ final class ControlSurfaceView: NSView {
         metaLabel.alignment = .left
         rangeNoteLabel.alignment = .left
         statusLabel.alignment = .right
+    }
+
+    private func setupBranding() {
+        brandMarkView.image = BrandAssets.markImage()
+        brandMarkView.imageScaling = .scaleProportionallyUpOrDown
+        brandMarkView.alphaValue = 0.96
+        addSubview(brandMarkView)
     }
 
     private func installSubviews() {
@@ -528,7 +539,7 @@ final class ControlSurfaceView: NSView {
     private func updateLabels() {
         let route = snapshot.route
 
-        eyebrowLabel.stringValue = ""
+        eyebrowLabel.stringValue = route.eyebrow
         valueLabel.stringValue = "\(snapshot.value)%"
         subcopyLabel.stringValue = snapshot.hoverMode ? route.hoverText : route.dragText
         metaLabel.stringValue = metaString()
@@ -584,16 +595,43 @@ final class ControlSurfaceView: NSView {
     private func layoutHero() {
         let paddingX: CGFloat = 34
         let heroOriginX = paddingX
-        let heroTop = bounds.height * 0.58
+        let heroTop = bounds.height * 0.56
 
+        let brandMarkSize = min(max(bounds.width * 0.05, 52), 72)
         eyebrowLabel.font = NSFont.systemFont(ofSize: 12, weight: .bold)
+        brandNameLabel.font = NSFont.systemFont(ofSize: min(bounds.width * 0.024, 28), weight: .semibold)
         valueLabel.font = NSFont.systemFont(ofSize: min(bounds.width * 0.18, 196), weight: .black)
         subcopyLabel.font = NSFont.systemFont(ofSize: min(bounds.width * 0.024, 24), weight: .medium)
 
-        eyebrowLabel.frame = .zero
+        brandMarkView.frame = NSRect(
+            x: heroOriginX,
+            y: bounds.height - controlTop - brandMarkSize - 24,
+            width: brandMarkSize,
+            height: brandMarkSize
+        )
+
+        let brandNameSize = singleLineSize(
+            for: brandNameLabel.stringValue,
+            font: brandNameLabel.font ?? .systemFont(ofSize: 24)
+        )
+        brandNameLabel.frame = NSRect(
+            x: brandMarkView.frame.maxX + 14,
+            y: brandMarkView.frame.midY - brandNameSize.height / 2 + 2,
+            width: brandNameSize.width + 6,
+            height: brandNameSize.height + 4
+        )
+
+        let eyebrowY = brandMarkView.frame.minY - 22
+        eyebrowLabel.frame = NSRect(
+            x: heroOriginX,
+            y: eyebrowY,
+            width: 220,
+            height: 18
+        )
 
         let valueSize = singleLineSize(for: valueLabel.stringValue, font: valueLabel.font ?? .systemFont(ofSize: 160))
-        valueLabel.frame = NSRect(x: heroOriginX, y: heroTop + 18, width: valueSize.width + 8, height: valueSize.height + 8)
+        let valueY = min(heroTop + 18, eyebrowLabel.frame.minY - valueSize.height - 14)
+        valueLabel.frame = NSRect(x: heroOriginX, y: valueY, width: valueSize.width + 8, height: valueSize.height + 8)
     }
 
     private func layoutFooter() {

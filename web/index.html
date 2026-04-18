@@ -3,7 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Field Control</title>
+    <title>StylusDeck</title>
+    <link rel="icon" type="image/png" href="/brand/stylusdeck-mark.png" />
     <style>
       :root {
         --bg-top: #071018;
@@ -169,6 +170,13 @@
         max-width: 760px;
       }
 
+      .brand-lockup {
+        display: block;
+        width: min(280px, 52vw);
+        margin-bottom: 18px;
+        filter: drop-shadow(0 0 18px rgba(111, 240, 194, 0.12));
+      }
+
       .value {
         margin: 0;
         font-size: clamp(5rem, 18vw, 13rem);
@@ -300,6 +308,7 @@
         </header>
 
         <div class="hero">
+          <img class="brand-lockup" src="/brand/stylusdeck-logo.png" alt="StylusDeck logo" />
           <div class="eyebrow hero-head" id="eyebrow">VOLUME</div>
           <h1 class="value" id="value">50%</h1>
           <p class="subcopy" id="subcopy"></p>

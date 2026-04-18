@@ -9,10 +9,14 @@ APP_NAME="StylusDeck"
 APP_DIR="$HOME/Applications/$APP_NAME.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
+RESOURCES_DIR="$CONTENTS_DIR/Resources"
 PLIST_PATH="$CONTENTS_DIR/Info.plist"
 LAUNCHER_PATH="$MACOS_DIR/$APP_NAME"
+ICON_SOURCE="$REPO_ROOT/assets/brand/stylusdeck-mark.png"
+ICONSET_DIR="$RESOURCES_DIR/AppIcon.iconset"
+ICON_PATH="$RESOURCES_DIR/AppIcon.icns"
 
-mkdir -p "$MACOS_DIR"
+mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 
 cat >"$PLIST_PATH" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -27,6 +31,8 @@ cat >"$PLIST_PATH" <<EOF
     <string>local.stylusdeck.app</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleName</key>
     <string>$APP_NAME</string>
     <key>CFBundlePackageType</key>
@@ -78,6 +84,31 @@ exec "\$BINARY"
 EOF
 
 chmod +x "$LAUNCHER_PATH"
+
+if [[ -f "$ICON_SOURCE" ]]; then
+  rm -rf "$ICONSET_DIR"
+  mkdir -p "$ICONSET_DIR"
+
+  make_icon() {
+    local size="$1"
+    local name="$2"
+    /usr/bin/sips -z "$size" "$size" "$ICON_SOURCE" --out "$ICONSET_DIR/$name" >/dev/null
+  }
+
+  make_icon 16 icon_16x16.png
+  make_icon 32 icon_16x16@2x.png
+  make_icon 32 icon_32x32.png
+  make_icon 64 icon_32x32@2x.png
+  make_icon 128 icon_128x128.png
+  make_icon 256 icon_128x128@2x.png
+  make_icon 256 icon_256x256.png
+  make_icon 512 icon_256x256@2x.png
+  make_icon 512 icon_512x512.png
+  make_icon 1024 icon_512x512@2x.png
+
+  /usr/bin/iconutil -c icns "$ICONSET_DIR" -o "$ICON_PATH"
+  rm -rf "$ICONSET_DIR"
+fi
 
 /usr/bin/touch "$APP_DIR"
 printf "%s\n" "$APP_DIR"

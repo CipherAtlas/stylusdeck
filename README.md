@@ -1,6 +1,10 @@
 # StylusDeck
 
 <p align="center">
+  <img src="assets/brand/stylusdeck-logo.png" alt="StylusDeck logo" width="320">
+</p>
+
+<p align="center">
   Control your audio equalizers directly from a drawing tablet.
 </p>
 

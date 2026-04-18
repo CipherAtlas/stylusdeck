@@ -9,6 +9,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var isFullscreenTransitionInFlight = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if let markImage = BrandAssets.markImage() {
+            NSApp.applicationIconImage = markImage
+        }
         installMenu()
         rebuildWindows()
         controller.start()

@@ -32,7 +32,10 @@ let package = Package(
         .executableTarget(
             name: "StylusDeck",
             dependencies: ["VolumeCore"],
-            path: "Sources/VolumeTablet"
+            path: "Sources/VolumeTablet",
+            resources: [
+                .process("Resources"),
+            ]
         ),
         .executableTarget(
             name: "VolumeBridge",
