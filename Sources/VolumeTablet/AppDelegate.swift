@@ -165,6 +165,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             case "4":
                 self.controller.navigate(to: .high)
                 return nil
+            case "5":
+                self.controller.toggleBank()
+                return nil
+            case "6":
+                self.controller.centerCurrentRoute()
+                return nil
             case "c":
                 self.controller.centerCurrentRoute()
                 return nil

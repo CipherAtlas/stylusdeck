@@ -12,7 +12,7 @@ from http import HTTPStatus
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 
 ROOT = Path(__file__).resolve().parent
@@ -22,7 +22,9 @@ PORT = 8421
 BRIDGE_PATH = ROOT / ".build" / "debug" / "VolumeBridge"
 EQ_BRIDGE_PATH = ROOT / ".build" / "debug" / "EqBridge"
 APP_ROUTES = {"/", "/volume", "/eq/low", "/eq/mid", "/eq/high"}
-EQ_BANDS = ("low", "mid", "high")
+SURFACE_BANKS = {"main", "fx"}
+SURFACE_ROUTES = {"volume", "low", "mid", "high"}
+SURFACE_PARAMETERS = {"primary", "frequency", "shape"}
 
 
 def clamp(value: float, lower: float, upper: float) -> float:
@@ -102,7 +104,6 @@ class EqBridge:
         self.executable = Path(os.environ.get("EQ_BRIDGE_BIN", EQ_BRIDGE_PATH))
         self.process: subprocess.Popen[str] | None = None
         self.lock = threading.Lock()
-        self.states = {band: 50 for band in EQ_BANDS}
 
     def start(self) -> None:
         if self.process and self.process.poll() is None:
@@ -144,28 +145,63 @@ class EqBridge:
             response = json.loads(line)
             return response
 
-    def get_band(self, band: str) -> dict[str, Any]:
-        self._validate_band(band)
-        response = self.request({"action": "status", "band": band})
-        response["band"] = band
-        response["value"] = int(response.get("value", self.states[band]))
-        self.states[band] = response["value"]
+    def get_surface_value(self, bank: str, route: str, parameter: str, secondary_parameter: str | None = None) -> dict[str, Any]:
+        self._validate_surface(bank, route, parameter)
+        if secondary_parameter is not None:
+            self._validate_surface(bank, route, secondary_parameter)
+        payload: dict[str, Any] = {"action": "status", "bank": bank, "route": route, "parameter": parameter}
+        if secondary_parameter is not None:
+            payload["secondaryParameter"] = secondary_parameter
+        response = self.request(payload)
+        response["bank"] = bank
+        response["route"] = route
+        response["parameter"] = parameter
+        response["value"] = int(response.get("value", 50))
         return response
 
-    def set_band(self, band: str, value: int) -> dict[str, Any]:
-        self._validate_band(band)
+    def set_surface_value(self, bank: str, route: str, parameter: str, value: int, secondary_parameter: str | None = None) -> dict[str, Any]:
+        self._validate_surface(bank, route, parameter)
+        if secondary_parameter is not None:
+            self._validate_surface(bank, route, secondary_parameter)
         clamped = int(clamp(value, 0, 100))
-        response = self.request({"action": "setBand", "band": band, "value": clamped})
-        response["band"] = band
+        payload: dict[str, Any] = {"action": "set", "bank": bank, "route": route, "parameter": parameter, "value": clamped}
+        if secondary_parameter is not None:
+            payload["secondaryParameter"] = secondary_parameter
+        response = self.request(payload)
+        response["bank"] = bank
+        response["route"] = route
+        response["parameter"] = parameter
         response["value"] = int(response.get("value", clamped))
-        self.states[band] = response["value"]
         return response
 
-    def get_output_volume(self) -> dict[str, Any]:
-        return self.request({"action": "getVolume"})
-
-    def set_output_volume(self, value: int) -> dict[str, Any]:
-        return self.request({"action": "setVolume", "value": int(clamp(value, 0, 100))})
+    def set_surface_gesture(
+        self,
+        bank: str,
+        route: str,
+        primary_value: int,
+        secondary_parameter: str,
+        secondary_value: int,
+    ) -> dict[str, Any]:
+        self._validate_surface(bank, route, "primary")
+        self._validate_surface(bank, route, secondary_parameter)
+        clamped_primary = int(clamp(primary_value, 0, 100))
+        clamped_secondary = int(clamp(secondary_value, 0, 100))
+        response = self.request(
+            {
+                "action": "gesture",
+                "bank": bank,
+                "route": route,
+                "parameter": "primary",
+                "value": clamped_primary,
+                "secondaryParameter": secondary_parameter,
+                "secondaryValue": clamped_secondary,
+            }
+        )
+        response["bank"] = bank
+        response["route"] = route
+        response["parameter"] = "primary"
+        response["value"] = int(response.get("value", clamped_primary))
+        return response
 
     def stop(self) -> None:
         with self.lock:
@@ -177,9 +213,13 @@ class EqBridge:
                     self.process.kill()
             self.process = None
 
-    def _validate_band(self, band: str) -> None:
-        if band not in EQ_BANDS:
-            raise ValueError(f"Unknown EQ band: {band}")
+    def _validate_surface(self, bank: str, route: str, parameter: str) -> None:
+        if bank not in SURFACE_BANKS:
+            raise ValueError(f"Unknown bank: {bank}")
+        if route not in SURFACE_ROUTES:
+            raise ValueError(f"Unknown route: {route}")
+        if parameter not in SURFACE_PARAMETERS:
+            raise ValueError(f"Unknown parameter: {parameter}")
 
 
 VOLUME = VolumeBridge(Path(os.environ.get("VOLUME_BRIDGE_BIN", BRIDGE_PATH)))
@@ -200,21 +240,17 @@ class VolumeHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
+        query = parse_qs(parsed.query)
 
-        if parsed.path == "/api/volume/state":
-            eq_status = EQ.get_output_volume()
-            if eq_status.get("connected"):
-                self.send_json({"kind": "volume", **eq_status})
-            else:
-                self.send_json({"kind": "volume", "value": VOLUME.get_current_volume(), "connected": True, "backend": "coreaudio", "detail": "Direct output volume"})
-            return
-
-        if parsed.path.startswith("/api/eq/") and parsed.path.endswith("/state"):
-            band = parsed.path.removeprefix("/api/eq/").removesuffix("/state").strip("/")
+        if parsed.path == "/api/state":
+            bank = query.get("bank", ["main"])[0]
+            route = query.get("route", ["volume"])[0]
+            parameter = query.get("parameter", ["primary"])[0]
+            secondary_parameter = query.get("secondaryParameter", [None])[0]
             try:
-                self.send_json({"kind": "eq", **EQ.get_band(band)})
-            except ValueError:
-                self.send_error(HTTPStatus.NOT_FOUND, "Unknown EQ band")
+                self.send_json(self.surface_state(bank, route, parameter, secondary_parameter))
+            except ValueError as error:
+                self.send_error(HTTPStatus.NOT_FOUND, str(error))
             return
 
         if parsed.path in APP_ROUTES:
@@ -230,26 +266,87 @@ class VolumeHandler(SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         length = int(self.headers.get("Content-Length", "0"))
         payload = json.loads(self.rfile.read(length) or b"{}")
-        value = int(clamp(float(payload.get("value", payload.get("volume", 0))), 0, 100))
+        value = int(clamp(float(payload.get("value", 0)), 0, 100))
 
-        if parsed.path == "/api/volume":
-            eq_status = EQ.set_output_volume(value)
-            if eq_status.get("connected"):
-                self.send_json({"kind": "volume", **eq_status})
-            else:
-                actual = VOLUME.set_system_volume(value)
-                self.send_json({"kind": "volume", "value": actual, "connected": True, "backend": "coreaudio", "detail": "Direct output volume"})
-            return
-
-        if parsed.path.startswith("/api/eq/"):
-            band = parsed.path.removeprefix("/api/eq/").strip("/")
+        if parsed.path == "/api/control":
+            bank = str(payload.get("bank", "main"))
+            route = str(payload.get("route", "volume"))
+            parameter = str(payload.get("parameter", "primary"))
+            secondary_parameter = payload.get("secondaryParameter")
+            secondary_value = payload.get("secondaryValue")
             try:
-                self.send_json({"kind": "eq", **EQ.set_band(band, value)})
-            except ValueError:
-                self.send_error(HTTPStatus.NOT_FOUND, "Unknown EQ band")
+                if secondary_parameter is not None and secondary_value is not None:
+                    self.send_json(self.surface_gesture(bank, route, value, str(secondary_parameter), int(clamp(float(secondary_value), 0, 100))))
+                else:
+                    self.send_json(self.surface_set(bank, route, parameter, value, str(secondary_parameter) if secondary_parameter is not None else None))
+            except ValueError as error:
+                self.send_error(HTTPStatus.NOT_FOUND, str(error))
             return
 
         self.send_error(HTTPStatus.NOT_FOUND, "Not found")
+
+    def surface_state(self, bank: str, route: str, parameter: str, secondary_parameter: str | None = None) -> dict[str, Any]:
+        eq_status = EQ.get_surface_value(bank, route, parameter, secondary_parameter)
+
+        if eq_status.get("connected"):
+            return eq_status
+
+        if bank == "main" and route == "volume" and parameter == "primary":
+            current_volume = VOLUME.get_current_volume()
+            return {
+                "ok": True,
+                "connected": True,
+                "backend": "coreaudio",
+                "detail": "Direct output volume",
+                "bank": bank,
+                "route": route,
+                "parameter": parameter,
+                "value": current_volume,
+                "displayValue": f"{current_volume}%",
+                "parameterLabel": "GAIN",
+                "clipDetected": False,
+            }
+
+        return eq_status
+
+    def surface_set(self, bank: str, route: str, parameter: str, value: int, secondary_parameter: str | None = None) -> dict[str, Any]:
+        eq_status = EQ.set_surface_value(bank, route, parameter, value, secondary_parameter)
+
+        if eq_status.get("connected"):
+            return eq_status
+
+        if bank == "main" and route == "volume" and parameter == "primary":
+            actual = VOLUME.set_system_volume(value)
+            return {
+                "ok": True,
+                "connected": True,
+                "backend": "coreaudio",
+                "detail": "Direct output volume",
+                "bank": bank,
+                "route": route,
+                "parameter": parameter,
+                "value": actual,
+                "displayValue": f"{actual}%",
+                "parameterLabel": "GAIN",
+                "clipDetected": False,
+            }
+
+        return eq_status
+
+    def surface_gesture(self, bank: str, route: str, primary_value: int, secondary_parameter: str, secondary_value: int) -> dict[str, Any]:
+        eq_status = EQ.set_surface_gesture(bank, route, primary_value, secondary_parameter, secondary_value)
+
+        if eq_status.get("connected"):
+            return eq_status
+
+        if bank == "main" and route == "volume":
+            actual = VOLUME.set_system_volume(primary_value)
+            eq_status["value"] = actual
+            eq_status["displayValue"] = f"{actual}%"
+            eq_status["parameterLabel"] = "GAIN"
+            return eq_status
+
+        return eq_status
 
     def send_json(self, payload: dict[str, Any], status: int = 200) -> None:
         body = json.dumps(payload).encode("utf-8")

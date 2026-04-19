@@ -131,6 +131,22 @@
         margin-bottom: 10px;
       }
 
+      .parameter {
+        margin-top: 8px;
+        font-size: 14px;
+        font-weight: 800;
+        letter-spacing: 0.14em;
+        color: rgba(244, 247, 247, 0.78);
+      }
+
+      .secondary-parameter {
+        margin-top: 18px;
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 0.14em;
+        color: rgba(244, 247, 247, 0.64);
+      }
+
       .nav {
         display: flex;
         gap: 10px;
@@ -193,6 +209,14 @@
         color: rgba(244, 247, 247, 0.82);
       }
 
+      .secondary-value {
+        margin-top: 6px;
+        font-size: clamp(1.5rem, 4.2vw, 2.4rem);
+        line-height: 1;
+        font-weight: 800;
+        color: rgba(244, 247, 247, 0.92);
+      }
+
       .meta {
         margin-top: 16px;
         font-size: 13px;
@@ -230,6 +254,53 @@
         transform: translate(-50%, 50%);
         box-shadow: 0 0 26px var(--accent-glow);
         transition: bottom 45ms linear, width 100ms ease, height 100ms ease;
+      }
+
+      .x-axis {
+        margin-top: 28px;
+        width: min(520px, 62vw);
+        max-width: 100%;
+      }
+
+      .x-track {
+        position: relative;
+        height: 2px;
+        background: rgba(255, 255, 255, 0.14);
+      }
+
+      .x-track::before {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 2px;
+        height: 28px;
+        background: rgba(255, 255, 255, 0.08);
+        transform: translate(-50%, -50%);
+      }
+
+      .x-track::after {
+        content: "";
+        position: absolute;
+        left: calc(var(--secondary-ratio, 0.5) * 100%);
+        top: 50%;
+        width: 22px;
+        height: 22px;
+        border-radius: 999px;
+        background: var(--accent);
+        transform: translate(-50%, -50%);
+        box-shadow: 0 0 24px var(--accent-glow);
+        transition: left 45ms linear, width 100ms ease, height 100ms ease;
+      }
+
+      body.dragging .x-track::after {
+        width: 28px;
+        height: 28px;
+      }
+
+      body.hovering .x-track::after {
+        width: 26px;
+        height: 26px;
       }
 
       body.dragging .rail-track::after {
@@ -295,6 +366,7 @@
       <section class="copy">
         <header class="header">
           <div class="actions">
+            <button id="bank" data-ui-control>Bank: Main</button>
             <button id="mode" data-ui-control>Mode: Drag</button>
             <button class="primary" id="fullscreen" data-ui-control>Fullscreen</button>
             <button id="secondary" data-ui-control>Center</button>
@@ -310,7 +382,13 @@
         <div class="hero">
           <img class="brand-lockup" src="/brand/stylusdeck-logo.png" alt="StylusDeck logo" />
           <div class="eyebrow hero-head" id="eyebrow">VOLUME</div>
+          <div class="parameter" id="parameter-label">Y · GAIN</div>
           <h1 class="value" id="value">50%</h1>
+          <div class="secondary-parameter" id="secondary-parameter-label">X · TRIM</div>
+          <div class="secondary-value" id="secondary-value">0.0 dB</div>
+          <div class="x-axis" aria-hidden="true">
+            <div class="x-track"></div>
+          </div>
           <p class="subcopy" id="subcopy"></p>
           <div class="meta" id="meta"></div>
         </div>
@@ -332,89 +410,62 @@
           path: "/volume",
           key: "volume",
           eyebrow: "VOLUME",
-          title: "volume",
           accent: "#6ff0c2",
           accentSoft: "rgba(111, 240, 194, 0.24)",
           accentGlow: "rgba(111, 240, 194, 0.44)",
-          rangeText: "Absolute Y position controls MacBook output volume below the top safe band.",
-          dragText: "Drag anywhere below the top safe band to raise output volume. Drag down to lower it.",
-          hoverText: "Hover anywhere below the top safe band to raise or lower output volume.",
           metaText: "Path: Master",
-          stateUrl: "/api/volume/state",
-          setUrl: "/api/volume",
-          resetLabel: "Center",
-          resetValue: 50,
         },
         "/eq/low": {
           path: "/eq/low",
           key: "low",
           eyebrow: "LOW BAND",
-          title: "low",
           accent: "#ff9b6b",
           accentSoft: "rgba(255, 155, 107, 0.24)",
           accentGlow: "rgba(255, 155, 107, 0.44)",
-          rangeText: "Absolute Y position controls the low EQ band below the top safe band.",
-          dragText: "Drag anywhere below the top safe band to boost or cut the low band.",
-          hoverText: "Hover anywhere below the top safe band to boost or cut the low band.",
           metaText: "Band: Low",
-          stateUrl: "/api/eq/low/state",
-          setUrl: "/api/eq/low",
-          resetLabel: "Center",
-          resetValue: 50,
         },
         "/eq/mid": {
           path: "/eq/mid",
           key: "mid",
           eyebrow: "MID BAND",
-          title: "mid",
           accent: "#f3d86e",
           accentSoft: "rgba(243, 216, 110, 0.24)",
           accentGlow: "rgba(243, 216, 110, 0.44)",
-          rangeText: "Absolute Y position controls the mid EQ band below the top safe band.",
-          dragText: "Drag anywhere below the top safe band to boost or cut the mid band.",
-          hoverText: "Hover anywhere below the top safe band to boost or cut the mid band.",
           metaText: "Band: Mid",
-          stateUrl: "/api/eq/mid/state",
-          setUrl: "/api/eq/mid",
-          resetLabel: "Center",
-          resetValue: 50,
         },
         "/eq/high": {
           path: "/eq/high",
           key: "high",
           eyebrow: "HIGH BAND",
-          title: "high",
           accent: "#7ab9ff",
           accentSoft: "rgba(122, 185, 255, 0.24)",
           accentGlow: "rgba(122, 185, 255, 0.44)",
-          rangeText: "Absolute Y position controls the high EQ band below the top safe band.",
-          dragText: "Drag anywhere below the top safe band to boost or cut the high band.",
-          hoverText: "Hover anywhere below the top safe band to boost or cut the high band.",
           metaText: "Band: High",
-          stateUrl: "/api/eq/high/state",
-          setUrl: "/api/eq/high",
-          resetLabel: "Center",
-          resetValue: 50,
         },
       };
-      const KEY_ROUTES = {
-        "1": "/volume",
-        "2": "/eq/low",
-        "3": "/eq/mid",
-        "4": "/eq/high",
-      };
+      const KEY_ROUTES = { "1": "/volume", "2": "/eq/low", "3": "/eq/mid", "4": "/eq/high" };
 
       const valueEl = document.getElementById("value");
       const eyebrowEl = document.getElementById("eyebrow");
+      const parameterLabelEl = document.getElementById("parameter-label");
+      const secondaryParameterLabelEl = document.getElementById("secondary-parameter-label");
+      const secondaryValueEl = document.getElementById("secondary-value");
       const subcopyEl = document.getElementById("subcopy");
       const rangeNoteEl = document.getElementById("range-note");
       const metaEl = document.getElementById("meta");
       const statusEl = document.getElementById("status");
+      const bankButton = document.getElementById("bank");
       const modeButton = document.getElementById("mode");
       const fullscreenButton = document.getElementById("fullscreen");
       const secondaryButton = document.getElementById("secondary");
 
       let currentValue = 50;
+      let currentDisplayValue = "50%";
+      let currentParameterLabel = "GAIN";
+      let currentSecondaryValue = 75;
+      let currentSecondaryDisplayValue = "0.0 dB";
+      let currentSecondaryParameterLabel = "TRIM";
+      let currentBank = "main";
       let currentPath = normalizePath(window.location.pathname);
       let currentPage = PAGES[currentPath];
       let dragging = false;
@@ -422,15 +473,48 @@
       let pendingValue = null;
       let lastSentValue = null;
       let sending = false;
-      let currentBackend = currentPage.key === "volume" ? "coreaudio" : "mock";
-      let currentConnected = currentPage.key === "volume";
+      let currentBackend = "native-eq";
+      let currentConnected = false;
+      let currentClipDetected = false;
       let routeVersion = 0;
+      let optionPressed = false;
+      let shiftPressed = false;
 
       const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
       function normalizePath(pathname) {
         if (pathname === "/") return "/volume";
         return PAGES[pathname] ? pathname : "/volume";
+      }
+
+      function activeParameter() {
+        return "primary";
+      }
+
+      function activeSecondaryParameter() {
+        return shiftPressed ? "shape" : "frequency";
+      }
+
+      function bankLabel(bank) {
+        return bank === "fx" ? "FX" : "Main";
+      }
+
+      function laneTitle(bank, route) {
+        switch (`${bank}:${route}`) {
+          case "main:volume": return "Volume";
+          case "main:low": return "Low";
+          case "main:mid": return "Mid";
+          case "main:high": return "High";
+          case "fx:volume": return "Filter";
+          case "fx:low": return "Unused";
+          case "fx:mid": return "Unused";
+          case "fx:high": return "Echo";
+          default: return route;
+        }
+      }
+
+      function eyebrowText(bank, route) {
+        return `${bank === "fx" ? "FX" : "MAIN"} · ${laneTitle(bank, route).toUpperCase()}`;
       }
 
       function isInteractiveTarget(target) {
@@ -456,56 +540,264 @@
         return top + (1 - value / 100) * height;
       }
 
+      function normalizedFromLinear(value, min, max) {
+        return Math.round(clamp((value - min) / (max - min), 0, 1) * 100);
+      }
+
+      function normalizedFromLog(value, min, max) {
+        const ratio = (Math.log(value) - Math.log(min)) / (Math.log(max) - Math.log(min));
+        return Math.round(clamp(ratio, 0, 1) * 100);
+      }
+
+      function resetValueFor(bank, route, parameter) {
+        switch (`${bank}:${route}:${parameter}`) {
+          case "main:volume:primary":
+          case "main:low:primary":
+          case "main:mid:primary":
+          case "main:high:primary":
+            return 50;
+          case "main:volume:frequency":
+            return normalizedFromLinear(0, -18, 6);
+          case "main:volume:shape":
+            return normalizedFromLinear(0, -6, 0);
+          case "main:low:frequency":
+            return normalizedFromLog(120, 40, 240);
+          case "main:mid:frequency":
+            return normalizedFromLog(1000, 250, 5000);
+          case "main:high:frequency":
+            return normalizedFromLog(8000, 4000, 16000);
+          case "main:mid:shape":
+            return normalizedFromLinear(0.85, 0.5, 2.0);
+          case "main:low:shape":
+          case "main:high:shape":
+            return normalizedFromLinear(1.0, 0.5, 1.2);
+          case "fx:volume:primary":
+            return 50;
+          case "fx:volume:frequency":
+            return normalizedFromLinear(1.1, 0.7, 3.0);
+          case "fx:volume:shape":
+            return normalizedFromLinear(0.3, 0, 1);
+          case "fx:low:primary":
+          case "fx:low:frequency":
+          case "fx:low:shape":
+          case "fx:mid:primary":
+          case "fx:mid:frequency":
+          case "fx:mid:shape":
+            return 50;
+          case "fx:high:primary":
+            return normalizedFromLinear(0, 0, 0.7);
+          case "fx:high:frequency":
+            return normalizedFromLinear(0.28, 0.06, 0.75);
+          case "fx:high:shape":
+            return normalizedFromLinear(0.25, 0, 0.82);
+          default:
+            return 0;
+        }
+      }
+
+      function interactionText(bank, route, parameter, isHoverMode) {
+        const action = isHoverMode ? "Hover" : "Drag";
+        switch (`${bank}:${route}:${parameter}`) {
+          case "main:volume:primary":
+            return `${action} anywhere below the top safe band to raise or lower output gain.`;
+          case "main:volume:frequency":
+            return `${action} anywhere below the top safe band to trim the wet output before limiting.`;
+          case "main:volume:shape":
+            return `${action} anywhere below the top safe band to set limiter ceiling.`;
+          case "main:low:primary":
+            return `${action} anywhere below the top safe band to boost or cut the low band.`;
+          case "main:mid:primary":
+            return `${action} anywhere below the top safe band to boost or cut the mid band.`;
+          case "main:high:primary":
+            return `${action} anywhere below the top safe band to boost or cut the high band.`;
+          case "main:low:frequency":
+            return `${action} anywhere below the top safe band to move the low shelf frequency.`;
+          case "main:mid:frequency":
+            return `${action} anywhere below the top safe band to move the mid peak frequency.`;
+          case "main:high:frequency":
+            return `${action} anywhere below the top safe band to move the high shelf frequency.`;
+          case "main:low:shape":
+            return `${action} anywhere below the top safe band to change low shelf slope.`;
+          case "main:mid:shape":
+            return `${action} anywhere below the top safe band to change mid-band Q.`;
+          case "main:high:shape":
+            return `${action} anywhere below the top safe band to change high shelf slope.`;
+          case "fx:volume:primary":
+            return `${action} anywhere below the top safe band to sweep the DJ filter macro.`;
+          case "fx:volume:frequency":
+            return `${action} anywhere below the top safe band to change filter resonance.`;
+          case "fx:volume:shape":
+            return `${action} anywhere below the top safe band to change filter character.`;
+          case "fx:low:primary":
+          case "fx:low:frequency":
+          case "fx:low:shape":
+          case "fx:mid:primary":
+          case "fx:mid:frequency":
+          case "fx:mid:shape":
+            return "This FX lane is unused and will not change the sound.";
+          case "fx:high:primary":
+            return `${action} anywhere below the top safe band to change echo wet mix.`;
+          case "fx:high:frequency":
+            return `${action} anywhere below the top safe band to change echo delay time.`;
+          case "fx:high:shape":
+            return `${action} anywhere below the top safe band to change echo feedback.`;
+          default:
+            return "";
+        }
+      }
+
+      function rangeText(bank, route, parameter) {
+        switch (`${bank}:${route}:${parameter}`) {
+          case "main:volume:primary":
+            return "Absolute Y position controls Mac output gain below the top safe band.";
+          case "main:volume:frequency":
+            return "X edits TRIM from -18 dB to +6 dB.";
+          case "main:volume:shape":
+            return "Shift+X edits CEILING from -6 dB to 0 dB.";
+          case "main:low:primary":
+          case "main:mid:primary":
+          case "main:high:primary":
+            return "Primary gain range: -18 dB to +18 dB.";
+          case "main:low:frequency":
+            return "X edits FREQ from 40 Hz to 240 Hz.";
+          case "main:mid:frequency":
+            return "X edits FREQ from 250 Hz to 5.0 kHz.";
+          case "main:high:frequency":
+            return "X edits FREQ from 4.0 kHz to 16.0 kHz.";
+          case "main:mid:shape":
+            return "Shift+X edits Q from 0.50 to 2.00.";
+          case "main:low:shape":
+          case "main:high:shape":
+            return "Shift+X edits SLOPE from 0.50 to 1.20.";
+          case "fx:volume:primary":
+            return "Filter center is neutral. Down is high-pass, up is low-pass.";
+          case "fx:volume:frequency":
+            return "X edits RESO from 0.70 to 3.00.";
+          case "fx:volume:shape":
+            return "Shift+X edits CHAR from 0% to 100%.";
+          case "fx:low:primary":
+          case "fx:low:frequency":
+          case "fx:low:shape":
+          case "fx:mid:primary":
+          case "fx:mid:frequency":
+          case "fx:mid:shape":
+            return "Unused lane. X and Y do nothing here.";
+          case "fx:high:primary":
+            return "Echo WET ranges from 0% to 70%.";
+          case "fx:high:frequency":
+            return "X edits TIME from 60 ms to 750 ms.";
+          case "fx:high:shape":
+            return "Shift+X edits FDBK from 0% to 82%.";
+          default:
+            return "";
+        }
+      }
+
       function applyTheme() {
         document.documentElement.style.setProperty("--accent", currentPage.accent);
         document.documentElement.style.setProperty("--accent-soft", currentPage.accentSoft);
         document.documentElement.style.setProperty("--accent-glow", currentPage.accentGlow);
-        eyebrowEl.textContent = currentPage.eyebrow;
-        rangeNoteEl.textContent = currentPage.rangeText;
-        secondaryButton.textContent = currentPage.resetLabel;
-        document.title = `${currentPage.eyebrow} · Field Control`;
+        eyebrowEl.textContent = eyebrowText(currentBank, currentPage.key);
+        bankButton.textContent = `Bank: ${bankLabel(currentBank)}`;
+        secondaryButton.textContent = "Center";
+        document.title = `${eyebrowText(currentBank, currentPage.key)} · StylusDeck`;
         document.querySelectorAll(".nav-link").forEach((link) => {
+          const route = PAGES[link.getAttribute("href")]?.key;
+          if (route) {
+            link.textContent = laneTitle(currentBank, route);
+          }
           link.classList.toggle("active", link.getAttribute("href") === currentPage.path);
         });
       }
 
-      function setUiValue(value, statusText = null) {
+      function renderLabels() {
+        const isInactiveFXLane = currentBank === "fx" && (currentPage.key === "low" || currentPage.key === "mid");
+        parameterLabelEl.textContent = `Y · ${currentParameterLabel}`;
+        valueEl.textContent = currentDisplayValue;
+        secondaryParameterLabelEl.textContent = `X · ${currentSecondaryParameterLabel}`;
+        secondaryValueEl.textContent = currentSecondaryDisplayValue;
+        if (isInactiveFXLane) {
+          subcopyEl.textContent = interactionText(currentBank, currentPage.key, "primary", hoverMode);
+          rangeNoteEl.textContent = rangeText(currentBank, currentPage.key, "primary");
+        } else {
+          subcopyEl.textContent = `${interactionText(currentBank, currentPage.key, "primary", hoverMode)} Horizontal movement controls ${currentSecondaryParameterLabel.toLowerCase()}.`;
+          rangeNoteEl.textContent = `Y ${rangeText(currentBank, currentPage.key, "primary")} · X ${rangeText(currentBank, currentPage.key, activeSecondaryParameter())} · Keys 1-4 lane · 5 bank · 6 center`;
+        }
+        statusEl.textContent = currentClipDetected ? `${hoverMode ? "Hover ready" : "Drag ready"} · CLIP` : hoverMode ? "Hover ready" : "Drag ready";
+      }
+
+      function setUiValue(value, displayValue = null, secondaryValue = null, secondaryDisplayValue = null, statusText = null) {
         currentValue = clamp(Math.round(value), 0, 100);
+        if (displayValue) currentDisplayValue = displayValue;
+        if (secondaryValue !== null) currentSecondaryValue = clamp(Math.round(secondaryValue), 0, 100);
+        if (secondaryDisplayValue) currentSecondaryDisplayValue = secondaryDisplayValue;
         const ratio = currentValue / 100;
         document.documentElement.style.setProperty("--value-ratio", ratio.toFixed(4));
+        document.documentElement.style.setProperty("--secondary-ratio", (currentSecondaryValue / 100).toFixed(4));
         document.documentElement.style.setProperty("--line-y", `${lineYForValue(currentValue)}px`);
-        valueEl.textContent = `${currentValue}%`;
-        if (statusText) statusEl.textContent = statusText;
+        parameterLabelEl.textContent = `Y · ${currentParameterLabel}`;
+        secondaryParameterLabelEl.textContent = `X · ${currentSecondaryParameterLabel}`;
+        valueEl.textContent = currentDisplayValue;
+        secondaryValueEl.textContent = currentSecondaryDisplayValue;
+        if (statusText) {
+          statusEl.textContent = currentClipDetected ? `${statusText} · CLIP` : statusText;
+        }
       }
 
       function renderMeta(detail = "") {
-        const connection = currentConnected ? currentBackend.toUpperCase() : `${currentBackend.toUpperCase()} · NOT WIRED`;
-        metaEl.textContent = detail ? `${currentPage.metaText} · ${connection} · ${detail}` : `${currentPage.metaText} · ${connection}`;
+        const connection = currentConnected ? currentBackend.toUpperCase() : `${currentBackend.toUpperCase()} · NOT CONNECTED`;
+        metaEl.textContent = detail ? `Bank: ${currentBank.toUpperCase()} · Lane: ${laneTitle(currentBank, currentPage.key)} · ${connection} · ${detail}` : `Bank: ${currentBank.toUpperCase()} · Lane: ${laneTitle(currentBank, currentPage.key)} · ${connection}`;
       }
 
       function syncModeUi() {
+        const isInactiveFXLane = currentBank === "fx" && (currentPage.key === "low" || currentPage.key === "mid");
         modeButton.textContent = `Mode: ${hoverMode ? "Hover" : "Drag"}`;
-        subcopyEl.textContent = hoverMode ? currentPage.hoverText : currentPage.dragText;
+        bankButton.textContent = `Bank: ${bankLabel(currentBank)}`;
+        parameterLabelEl.textContent = `Y · ${currentParameterLabel}`;
+        secondaryParameterLabelEl.textContent = `X · ${currentSecondaryParameterLabel}`;
+        if (isInactiveFXLane) {
+          subcopyEl.textContent = interactionText(currentBank, currentPage.key, "primary", hoverMode);
+          rangeNoteEl.textContent = rangeText(currentBank, currentPage.key, "primary");
+        } else {
+          subcopyEl.textContent = `${interactionText(currentBank, currentPage.key, "primary", hoverMode)} Horizontal movement controls ${currentSecondaryParameterLabel.toLowerCase()}.`;
+          rangeNoteEl.textContent = `Y ${rangeText(currentBank, currentPage.key, "primary")} · X ${rangeText(currentBank, currentPage.key, activeSecondaryParameter())} · Keys 1-4 lane · 5 bank · 6 center`;
+        }
         if (!dragging) {
-          statusEl.textContent = hoverMode ? "Hover ready" : "Drag ready";
+          statusEl.textContent = currentClipDetected ? `${hoverMode ? "Hover ready" : "Drag ready"} · CLIP` : hoverMode ? "Hover ready" : "Drag ready";
         }
       }
 
       async function fetchState() {
         const version = routeVersion;
-        const response = await fetch(currentPage.stateUrl, { cache: "no-store" });
+        const parameter = activeParameter();
+        const secondaryParameter = activeSecondaryParameter();
+        const url = `/api/state?bank=${encodeURIComponent(currentBank)}&route=${encodeURIComponent(currentPage.key)}&parameter=${encodeURIComponent(parameter)}&secondaryParameter=${encodeURIComponent(secondaryParameter)}`;
+        const response = await fetch(url, { cache: "no-store" });
         const data = await response.json();
         if (version !== routeVersion) return;
+        currentBank = data.bank || currentBank;
         currentBackend = data.backend || currentBackend;
         currentConnected = Boolean(data.connected);
-        setUiValue(data.value, hoverMode ? "Hover ready" : "Drag ready");
+        currentClipDetected = Boolean(data.clipDetected);
+        currentParameterLabel = data.parameterLabel || currentParameterLabel;
+        currentSecondaryParameterLabel = data.secondaryParameterLabel || currentSecondaryParameterLabel;
+        setUiValue(
+          data.value ?? currentValue,
+          data.displayValue || currentDisplayValue,
+          data.secondaryValue ?? currentSecondaryValue,
+          data.secondaryDisplayValue || currentSecondaryDisplayValue,
+          hoverMode ? "Hover ready" : "Drag ready",
+        );
         renderMeta(data.detail || "");
+        syncModeUi();
       }
 
-      async function pushValue(value) {
+      async function pushPoint(primaryValue, secondaryValue) {
         const version = routeVersion;
-        pendingValue = value;
-        setUiValue(value, "Live");
+        const parameter = activeParameter();
+        const secondaryParameter = activeSecondaryParameter();
+        pendingValue = { primaryValue, secondaryValue };
+        setUiValue(primaryValue, currentDisplayValue, secondaryValue, currentSecondaryDisplayValue, "Live");
         if (sending) return;
 
         sending = true;
@@ -513,36 +805,55 @@
           const next = pendingValue;
           pendingValue = null;
 
-          if (next === lastSentValue) {
+          if (lastSentValue && next.primaryValue === lastSentValue.primaryValue && next.secondaryValue === lastSentValue.secondaryValue) {
             continue;
           }
 
-          const response = await fetch(currentPage.setUrl, {
+          const response = await fetch("/api/control", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ value: next }),
+            body: JSON.stringify({
+              bank: currentBank,
+              route: currentPage.key,
+              parameter,
+              value: next.primaryValue,
+              secondaryParameter,
+              secondaryValue: next.secondaryValue,
+            }),
           });
           const data = await response.json();
           if (version !== routeVersion) {
             continue;
           }
+          currentBank = data.bank || currentBank;
           currentBackend = data.backend || currentBackend;
           currentConnected = Boolean(data.connected);
+          currentClipDetected = Boolean(data.clipDetected);
+          currentParameterLabel = data.parameterLabel || currentParameterLabel;
+          currentSecondaryParameterLabel = data.secondaryParameterLabel || currentSecondaryParameterLabel;
+          currentDisplayValue = data.displayValue || currentDisplayValue;
+          currentSecondaryDisplayValue = data.secondaryDisplayValue || currentSecondaryDisplayValue;
           renderMeta(data.detail || "");
+          setUiValue(
+            data.value ?? next.primaryValue,
+            currentDisplayValue,
+            data.secondaryValue ?? next.secondaryValue,
+            currentSecondaryDisplayValue,
+            "Live",
+          );
           lastSentValue = next;
         }
         sending = false;
       }
 
-      function valueFromPointer(event) {
+      function valuesFromPointer(event) {
         const { top, height } = controlBounds();
-        const ratio = 1 - clamp((event.clientY - top) / height, 0, 1);
-        return Math.round(ratio * 100);
-      }
-
-      function pointerInsideControl(event) {
-        const { top, bottom } = controlBounds();
-        return event.clientY >= top && event.clientY <= bottom;
+        const primaryRatio = 1 - clamp((event.clientY - top) / height, 0, 1);
+        const secondaryRatio = clamp(event.clientX / Math.max(window.innerWidth, 1), 0, 1);
+        return {
+          primaryValue: Math.round(primaryRatio * 100),
+          secondaryValue: Math.round(secondaryRatio * 100),
+        };
       }
 
       function beginDrag(event) {
@@ -554,38 +865,42 @@
         if (event.pointerId !== undefined) {
           document.body.setPointerCapture(event.pointerId);
         }
-        pushValue(valueFromPointer(event));
+        const point = valuesFromPointer(event);
+        pushPoint(point.primaryValue, point.secondaryValue);
       }
 
       function moveDrag(event) {
         if (isInteractiveTarget(event.target)) {
           document.body.classList.remove("hovering");
           if (!dragging) {
-            statusEl.textContent = hoverMode ? "Hover ready" : "Drag ready";
+            syncModeUi();
           }
           return;
         }
 
         if (hoverMode) {
-          if (!pointerInsideControl(event)) {
+          const { top, bottom } = controlBounds();
+          if (event.clientY < top || event.clientY > bottom) {
             document.body.classList.remove("hovering");
-            statusEl.textContent = "Hover ready";
+            syncModeUi();
             return;
           }
           document.body.classList.add("hovering");
-          pushValue(valueFromPointer(event));
+          const point = valuesFromPointer(event);
+          pushPoint(point.primaryValue, point.secondaryValue);
           return;
         }
 
         if (!dragging) return;
         event.preventDefault();
-        pushValue(valueFromPointer(event));
+        const point = valuesFromPointer(event);
+        pushPoint(point.primaryValue, point.secondaryValue);
       }
 
       function endDrag(event) {
         if (hoverMode) {
           document.body.classList.remove("hovering");
-          statusEl.textContent = "Hover ready";
+          syncModeUi();
           return;
         }
 
@@ -595,7 +910,7 @@
         if (event.pointerId !== undefined && document.body.hasPointerCapture(event.pointerId)) {
           document.body.releasePointerCapture(event.pointerId);
         }
-        statusEl.textContent = "Drag ready";
+        syncModeUi();
       }
 
       async function navigateTo(path, options = {}) {
@@ -610,8 +925,9 @@
         pendingValue = null;
         lastSentValue = null;
         sending = false;
-        currentBackend = currentPage.key === "volume" ? "coreaudio" : "mock";
-        currentConnected = currentPage.key === "volume";
+        currentBackend = "native-eq";
+        currentConnected = false;
+        currentClipDetected = false;
         document.body.classList.remove("dragging");
         document.body.classList.remove("hovering");
 
@@ -619,7 +935,7 @@
         window.history[historyFn]({}, "", currentPath);
 
         applyTheme();
-        syncModeUi();
+        renderLabels();
         renderMeta("");
         statusEl.textContent = "Loading";
 
@@ -631,6 +947,42 @@
           }
         }
 
+        restoreMacroFocus();
+      }
+
+      async function updateModifierState(nextOption, nextShift) {
+        if (nextOption === optionPressed && nextShift === shiftPressed) return;
+        optionPressed = nextOption;
+        shiftPressed = nextShift;
+        routeVersion += 1;
+        pendingValue = null;
+        lastSentValue = null;
+        sending = false;
+        renderLabels();
+        renderMeta("");
+        statusEl.textContent = "Loading";
+        try {
+          await fetchState();
+        } catch {
+          statusEl.textContent = "Server error";
+        }
+      }
+
+      async function toggleBank() {
+        currentBank = currentBank === "main" ? "fx" : "main";
+        routeVersion += 1;
+        pendingValue = null;
+        lastSentValue = null;
+        sending = false;
+        applyTheme();
+        renderLabels();
+        renderMeta("");
+        statusEl.textContent = "Loading";
+        try {
+          await fetchState();
+        } catch {
+          statusEl.textContent = "Server error";
+        }
         restoreMacroFocus();
       }
 
@@ -650,6 +1002,10 @@
         restoreMacroFocus();
       });
 
+      bankButton.addEventListener("click", () => {
+        toggleBank();
+      });
+
       fullscreenButton.addEventListener("click", async () => {
         if (!document.fullscreenElement) {
           await document.documentElement.requestFullscreen();
@@ -659,7 +1015,10 @@
       });
 
       secondaryButton.addEventListener("click", () => {
-        pushValue(currentPage.resetValue);
+        pushPoint(
+          resetValueFor(currentBank, currentPage.key, "primary"),
+          resetValueFor(currentBank, currentPage.key, activeSecondaryParameter()),
+        );
         restoreMacroFocus();
       });
 
@@ -671,23 +1030,53 @@
       });
 
       window.addEventListener("keydown", async (event) => {
+        if (event.key === "Alt") {
+          event.preventDefault();
+          updateModifierState(true, event.shiftKey);
+          return;
+        }
+        if (event.key === "Shift") {
+          updateModifierState(event.altKey, true);
+          return;
+        }
         if (KEY_ROUTES[event.key]) {
           event.preventDefault();
           navigateTo(KEY_ROUTES[event.key]);
           return;
         }
-
+        if (event.key === "5") {
+          event.preventDefault();
+          toggleBank();
+          return;
+        }
+        if (event.key === "6") {
+          event.preventDefault();
+          pushPoint(
+            resetValueFor(currentBank, currentPage.key, "primary"),
+            resetValueFor(currentBank, currentPage.key, activeSecondaryParameter()),
+          );
+          restoreMacroFocus();
+          return;
+        }
         if (event.key.toLowerCase() === "f") {
           await document.documentElement.requestFullscreen();
           statusEl.textContent = "Fullscreen";
           restoreMacroFocus();
           return;
         }
-
         if (event.key.toLowerCase() === "c") {
           event.preventDefault();
-          pushValue(currentPage.resetValue);
+          pushPoint(
+            resetValueFor(currentBank, currentPage.key, "primary"),
+            resetValueFor(currentBank, currentPage.key, activeSecondaryParameter()),
+          );
           restoreMacroFocus();
+        }
+      });
+
+      window.addEventListener("keyup", (event) => {
+        if (event.key === "Alt" || event.key === "Shift") {
+          updateModifierState(event.altKey, event.shiftKey);
         }
       });
 
@@ -698,7 +1087,7 @@
       });
 
       window.addEventListener("resize", () => {
-        setUiValue(currentValue);
+        setUiValue(currentValue, currentDisplayValue);
       });
 
       restoreMacroFocus();

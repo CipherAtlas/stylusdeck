@@ -45,5 +45,10 @@ let package = Package(
             name: "EqBridge",
             dependencies: ["VolumeCore"]
         ),
+        .testTarget(
+            name: "VolumeCoreTests",
+            dependencies: ["VolumeCore"],
+            path: "Tests/VolumeCoreTests"
+        ),
     ]
 )

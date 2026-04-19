@@ -5,57 +5,25 @@
 </p>
 
 <p align="center">
-  Control your audio equalizers directly from a drawing tablet or your mouse.
+  A macOS live-audio control surface for drawing tablets, pen displays, mice, and macro-key setups.
 </p>
 
 <p align="center">
-  StylusDeck turns vertical movement into immediate, expressive control with absolute positioning: higher on the surface means more, lower means less, whether you are using a stylus or a mouse.
+  <img src="assets/screenshots/volume-window.png" alt="StylusDeck screenshot" width="100%">
 </p>
 
-> For the smoothest experience, use `Hover` mode, move between Volume / Low / Mid / High with `1`, `2`, `3`, `4`, and press `C` any time you want to snap the current control back to center. That combination feels especially seamless on both a mouse and a tablet.
+## What It Does
 
-<p align="center">
-  <img src="assets/screenshots/volume-window.png" alt="StylusDeck volume control screen" width="100%">
-</p>
+StylusDeck taps live system audio and gives you instant absolute-position control over:
 
-## Screenshots
+- volume
+- 3-band EQ
+- DJ filter
+- echo
+- output trim
+- limiter ceiling
 
-<p align="center">
-  <img src="assets/screenshots/low-hover-window.png" alt="StylusDeck low EQ hover mode" width="49%">
-  <img src="assets/screenshots/high-hover-window.png" alt="StylusDeck high EQ hover mode" width="49%">
-</p>
-
-## What It Is
-
-StylusDeck is a macOS-native control surface for volume and three EQ bands:
-
-- Volume
-- Low
-- Mid
-- High
-
-It is designed for drawing tablets, pen displays, and macro-driven setups where fast, absolute control matters more than tiny knobs or traditional mixer UI.
-
-You can also use it comfortably with a mouse. Both the mouse and the stylus use absolute vertical positioning rather than relative movement, so your hand position maps directly to the current value. Hover mode works remarkably well with both input methods, and it makes fast EQ moves feel unusually fluid.
-
-## Recommended Workflow
-
-For most people, the best setup is:
-
-- leave StylusDeck in `Hover` mode
-- use `1`, `2`, `3`, `4` to jump between Volume, Low, Mid, and High
-- use `C` as your instant center-value macro whenever you want to reset the current lane back to `50`
-
-That flow keeps your hands moving without friction and makes the app feel much more like an instrument than a traditional mixer.
-
-## Why It Feels Good To Use
-
-- Absolute vertical control. Both mouse and stylus use absolute positioning, so higher means more and lower means less.
-- Mouse support for the same direct vertical workflow when you are not on a tablet.
-- Drag mode for deliberate, tactile movement.
-- Hover mode for pressure-free adjustment with the pen floating above the surface.
-- Native low-latency audio processing with live monitor output and OBS capture routing.
-- Fullscreen-friendly layout built for large, uncluttered gestures.
+It plays the wet signal to your real output device and mirrors the same processed signal to `BlackHole 2ch` for OBS.
 
 ## Quick Start
 
@@ -63,55 +31,74 @@ That flow keeps your hands moving without friction and makes the app feel much m
 ./start.sh
 ```
 
-That single command will:
+That script will:
 
-- verify macOS prerequisites
-- install Homebrew if needed
+- check macOS prerequisites
 - install `BlackHole 2ch` if needed
-- build the native app and audio bridge binaries
-- install `StylusDeck.app` into `~/Applications`
-- print a readable setup report explaining what was installed, why it was needed, and how audio routing works
-- launch the native `StylusDeck` app
+- build the app
+- install `~/Applications/StylusDeck.app`
+- launch StylusDeck
 
-If macOS prompts for Xcode Command Line Tools, finish that install and rerun `./start.sh`.
+After setup, you can open `~/Applications/StylusDeck.app` directly from Finder.
 
-If `BlackHole 2ch` is installed for the first time and macOS has not activated it yet, reboot once and run `./start.sh` again.
+## Control Model
 
-After that first setup run, you can launch `StylusDeck.app` directly from Finder at `~/Applications/StylusDeck.app` instead of using the terminal command again.
+StylusDeck uses one active lane at a time:
 
-## Audio Routing
+- `Y` = main control
+- `X` = companion control
+- `Shift + X` = tertiary/shape-style control on supported lanes
 
-While StylusDeck is running, it:
+### Main Bank
 
-- taps live system audio
-- applies the selected volume or EQ processing in real time
-- sends the wet monitor signal to your real playback device, such as headphones or speakers
-- mirrors that same wet signal to `BlackHole 2ch` for OBS
+- `1` Volume: `Y` volume, `X` trim, `Shift + X` limiter ceiling
+- `2` Low: `Y` gain, `X` frequency, `Shift + X` slope
+- `3` Mid: `Y` gain, `X` frequency, `Shift + X` Q
+- `4` High: `Y` gain, `X` frequency, `Shift + X` slope
 
-If macOS is currently set to use `BlackHole 2ch` as the live output device, StylusDeck temporarily redirects monitor playback back to a real output device while keeping `BlackHole 2ch` available for capture.
+### FX Bank
 
-## Controls
+Press `5` to switch to `FX`.
 
-- `1`, `2`, `3`, `4` switch instantly between Volume, Low, Mid, and High
-- `C` centers the current route at `50`
-- `F` toggles fullscreen
-- `Mode` switches between Drag and Hover
+- `1` Filter: `Y` sweep, `X` resonance, `Shift + X` character
+- `2` Unused
+- `3` Unused
+- `4` Echo: `Y` wet, `X` time, `Shift + X` feedback
 
-## Native App First
+## Shortcuts
 
-The native app is the primary experience:
+- `1` `2` `3` `4` select the lane in the current bank
+- `5` toggle `MAIN` / `FX`
+- `6` reset the current parameter
+- `C` keyboard alias for reset
+- `F` toggle fullscreen
+- `Mode` switch between Drag and Hover
+
+## Visualizer
+
+StylusDeck includes a native visualizer with a `Visuals` panel.
+
+- visualizer is **off by default**
+- available modes: `Wave Ribbon`, `Radial Halo`, `Spectrum Bars`, `Orbit Sphere`
+- while the `Visuals` panel is open, pointer movement does not affect sound
+
+The visualizer is still a **work in progress**. Expect performance issues when visuals are enabled, especially in heavier modes.
+
+## Running
+
+Native app:
 
 ```bash
 ./start.sh
 ```
 
-or, after setup:
+or:
 
 ```bash
 ./scripts/run.sh
 ```
 
-There is also an optional browser-based secondary UI:
+Optional web UI:
 
 ```bash
 ./scripts/run-web.sh
@@ -124,31 +111,12 @@ There is also an optional browser-based secondary UI:
 - Homebrew
 - `BlackHole 2ch`
 
-The bootstrapper handles everything except the Apple-managed Xcode Command Line Tools prompt.
+## OBS
 
-## OBS Setup
-
-In OBS:
-
-1. Add `Audio Input Capture`
-2. Choose `BlackHole 2ch`
-
-OBS will then receive the same processed signal that StylusDeck is sending to your headphones or speakers.
-
-## Repo Layout
-
-```text
-.
-|-- Sources/
-|-- assets/screenshots/
-|-- scripts/
-|-- start.sh
-|-- server.py
-`-- web/
-```
+In OBS, add `Audio Input Capture` and choose `BlackHole 2ch`.
 
 ## Notes
 
-- Keep the app running while you want live EQ and routing active.
-- When the app exits normally, it tears down its temporary audio routing changes.
-- The browser UI remains available, but the native app is the intended main path.
+- Keep StylusDeck running while you want live processing active.
+- On normal exit, it restores temporary audio-routing changes.
+- The native app is the primary experience.

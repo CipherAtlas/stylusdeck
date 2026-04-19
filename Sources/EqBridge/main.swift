@@ -4,28 +4,8 @@ import Darwin
 import Foundation
 import VolumeCore
 
-private struct Command: Decodable {
-    let action: String
-    let band: String?
-    let value: Int?
-}
-
-struct Response: Encodable {
-    let ok: Bool
-    let connected: Bool
-    let backend: String
-    let detail: String
-    let band: String?
-    let value: Int?
-}
-
-private struct BiquadCoefficients {
-    var b0: Float
-    var b1: Float
-    var b2: Float
-    var a1: Float
-    var a2: Float
-}
+typealias Command = SurfaceCommand
+typealias Response = SurfaceResponse
 
 private struct BiquadState {
     var x1: Float = 0
@@ -52,6 +32,8 @@ private struct ChannelState {
     var low = BiquadState()
     var mid = BiquadState()
     var high = BiquadState()
+    var filterLowPass = BiquadState()
+    var filterHighPass = BiquadState()
 }
 
 private final class SampleRingBuffer {
@@ -116,6 +98,7 @@ final class EqProcessor {
     private let aggregateReadyDelayUS: useconds_t = 80_000
     private let monitorRingBuffer = SampleRingBuffer(capacity: 48_000 * 8)
     private let blackHoleRingBuffer = SampleRingBuffer(capacity: 48_000 * 8)
+    private let echoBufferCapacity = 48_000 * 4
 
     private var inputUnit: AudioUnit?
     private var monitorOutputQueue: AudioQueueRef?
@@ -133,23 +116,50 @@ final class EqProcessor {
     private var redirectedSystemOutput = false
     private var sampleRate: Double = 48_000
     private let channels: UInt32 = 2
-    private var bandValues: [String: Int] = ["low": 50, "mid": 50, "high": 50]
+    private var controlState = AudioControlState()
     private var lowCoefficients = BiquadCoefficients(b0: 1, b1: 0, b2: 0, a1: 0, a2: 0)
     private var midCoefficients = BiquadCoefficients(b0: 1, b1: 0, b2: 0, a1: 0, a2: 0)
     private var highCoefficients = BiquadCoefficients(b0: 1, b1: 0, b2: 0, a1: 0, a2: 0)
+    private var filterLowPassCoefficients = BiquadCoefficients(b0: 1, b1: 0, b2: 0, a1: 0, a2: 0)
+    private var filterHighPassCoefficients = BiquadCoefficients(b0: 1, b1: 0, b2: 0, a1: 0, a2: 0)
     private var channelStates = [ChannelState(), ChannelState()]
-    private var masterVolume: Float = 1
+    private var outputGain: Float = 1
+    private var limiterCeiling: Float = 1
+    private var filterWet: Float = 0
+    private var filterLowPassBlend: Float = 0
+    private var filterHighPassBlend: Float = 0
+    private var filterCharacter: Float = 0
+    private var echoWet: Float = 0
+    private var echoFeedback: Float = 0
+    private var echoDelaySamplesTarget: Int = 1
+    private var echoDelaySamplesCurrent: Int = 1
+    private var echoLeftBuffer: [Float]
+    private var echoRightBuffer: [Float]
+    private var echoWriteIndex = 0
     private var started = false
     private var detail = "Idle"
     private var captureCallbacks: UInt64 = 0
     private var outputCallbacks: UInt64 = 0
     private var lastInputPeak: Float = 0
     private var lastOutputPeak: Float = 0
+    private var lastRMSLevel: Float = 0
+    private var lastLowEnergy: Float = 0
+    private var lastMidEnergy: Float = 0
+    private var lastHighEnergy: Float = 0
+    private var lastTransient: Float = 0
+    private var lastClipDetected = false
+    private var clipHoldCallbacks = 0
+    private var analyzerLowState: Float = 0
+    private var analyzerHighState: Float = 0
+    private var analyzerPreviousSample: Float = 0
+    private var analyzerPreviousPeak: Float = 0
     private var captureBuffer: UnsafeMutablePointer<Float>
 
     init() {
         captureBuffer = .allocate(capacity: Int(maxCaptureFrames * channels))
         captureBuffer.initialize(repeating: 0, count: Int(maxCaptureFrames * channels))
+        echoLeftBuffer = Array(repeating: 0, count: echoBufferCapacity)
+        echoRightBuffer = Array(repeating: 0, count: echoBufferCapacity)
         recalculateCoefficients()
     }
 
@@ -158,78 +168,59 @@ final class EqProcessor {
         captureBuffer.deallocate()
     }
 
-    func status(for band: String?) -> Response {
+    func status(
+        for bank: SurfaceBank,
+        route: SurfaceRoute,
+        parameter: SurfaceParameter,
+        secondaryParameter: SurfaceParameter? = nil
+    ) -> Response {
         do {
             try ensureStarted()
-            lock.lock()
-            let captureCallbacks = self.captureCallbacks
-            let outputCallbacks = self.outputCallbacks
-            let inputPeak = self.lastInputPeak
-            let outputPeak = self.lastOutputPeak
-            lock.unlock()
-            let stats = String(
-                format: "cap=%llu out=%llu in=%.4f out=%.4f",
-                captureCallbacks,
-                outputCallbacks,
-                inputPeak,
-                outputPeak
-            )
-            return Response(
-                ok: true,
-                connected: true,
-                backend: "native-eq",
-                detail: "\(detail) · \(stats)",
-                band: band,
-                value: band.flatMap { bandValues[$0] }
-            )
+            return makeResponse(bank: bank, route: route, parameter: parameter, secondaryParameter: secondaryParameter)
         } catch {
-            return Response(
-                ok: false,
-                connected: false,
-                backend: "native-eq",
-                detail: error.localizedDescription,
-                band: band,
-                value: band.flatMap { bandValues[$0] }
-            )
+            return makeErrorResponse(error, bank: bank, route: route, parameter: parameter, secondaryParameter: secondaryParameter)
         }
     }
 
-    func setBand(_ band: String, value: Int) -> Response {
+    func setValue(
+        _ value: Int,
+        for bank: SurfaceBank,
+        route: SurfaceRoute,
+        parameter: SurfaceParameter,
+        secondaryParameter: SurfaceParameter? = nil
+    ) -> Response {
         do {
             try ensureStarted()
             let clamped = max(0, min(100, value))
             lock.lock()
-            bandValues[band] = clamped
+            controlState.setNormalizedValue(clamped, for: bank, route: route, parameter: parameter)
             recalculateCoefficients()
             lock.unlock()
-            return Response(ok: true, connected: true, backend: "native-eq", detail: detail, band: band, value: clamped)
+            return makeResponse(bank: bank, route: route, parameter: parameter, secondaryParameter: secondaryParameter)
         } catch {
-            return Response(ok: false, connected: false, backend: "native-eq", detail: error.localizedDescription, band: band, value: value)
+            return makeErrorResponse(error, bank: bank, route: route, parameter: parameter, secondaryParameter: secondaryParameter)
         }
     }
 
-    func getOutputVolume() -> Response {
+    func setGesture(
+        primaryValue: Int,
+        secondaryValue: Int,
+        for bank: SurfaceBank,
+        route: SurfaceRoute,
+        secondaryParameter: SurfaceParameter
+    ) -> Response {
         do {
             try ensureStarted()
+            let clampedPrimary = max(0, min(100, primaryValue))
+            let clampedSecondary = max(0, min(100, secondaryValue))
             lock.lock()
-            let value = Int((masterVolume * 100).rounded())
+            controlState.setNormalizedValue(clampedPrimary, for: bank, route: route, parameter: .primary)
+            controlState.setNormalizedValue(clampedSecondary, for: bank, route: route, parameter: secondaryParameter)
+            recalculateCoefficients()
             lock.unlock()
-            return Response(ok: true, connected: true, backend: "native-eq", detail: detail, band: nil, value: value)
+            return makeResponse(bank: bank, route: route, parameter: .primary, secondaryParameter: secondaryParameter)
         } catch {
-            return Response(ok: false, connected: false, backend: "native-eq", detail: error.localizedDescription, band: nil, value: nil)
-        }
-    }
-
-    func setOutputVolume(_ value: Int) -> Response {
-        do {
-            try ensureStarted()
-            let clamped = max(0, min(100, value))
-            lock.lock()
-            masterVolume = Float(clamped) / 100
-            lock.unlock()
-            return Response(ok: true, connected: true, backend: "native-eq", detail: detail, band: nil, value: clamped)
-        } catch {
-            return Response(ok: false, connected: false, backend: "native-eq", detail: error.localizedDescription, band: nil, value: value)
+            return makeErrorResponse(error, bank: bank, route: route, parameter: .primary, secondaryParameter: secondaryParameter)
         }
     }
 
@@ -281,6 +272,9 @@ final class EqProcessor {
 
         monitorRingBuffer.clear()
         blackHoleRingBuffer.clear()
+        echoLeftBuffer = Array(repeating: 0, count: echoBufferCapacity)
+        echoRightBuffer = Array(repeating: 0, count: echoBufferCapacity)
+        echoWriteIndex = 0
         started = false
         detail = "Idle"
     }
@@ -368,6 +362,17 @@ final class EqProcessor {
         outputCallbacks = 0
         lastInputPeak = 0
         lastOutputPeak = 0
+        lastRMSLevel = 0
+        lastLowEnergy = 0
+        lastMidEnergy = 0
+        lastHighEnergy = 0
+        lastTransient = 0
+        lastClipDetected = false
+        clipHoldCallbacks = 0
+        analyzerLowState = 0
+        analyzerHighState = 0
+        analyzerPreviousSample = 0
+        analyzerPreviousPeak = 0
         lock.unlock()
         recalculateCoefficients()
     }
@@ -567,11 +572,26 @@ final class EqProcessor {
         let low = lowCoefficients
         let mid = midCoefficients
         let high = highCoefficients
-        let gain = masterVolume
+        let filterLowPass = filterLowPassCoefficients
+        let filterHighPass = filterHighPassCoefficients
+        let gain = outputGain
+        let ceiling = limiterCeiling
+        let filterWet = self.filterWet
+        let filterLowPassBlend = self.filterLowPassBlend
+        let filterHighPassBlend = self.filterHighPassBlend
+        let filterCharacter = self.filterCharacter
+        let echoWet = self.echoWet
+        let echoFeedback = self.echoFeedback
+        let echoDelayTarget = self.echoDelaySamplesTarget
         lock.unlock()
 
         var inputPeak: Float = 0
         var outputPeak: Float = 0
+        var sumSquares: Float = 0
+        var lowSum: Float = 0
+        var midSum: Float = 0
+        var highSum: Float = 0
+        var clipDetected = false
         for frame in 0..<Int(frameCount) {
             let leftIndex = frame * 2
             let rightIndex = leftIndex + 1
@@ -581,7 +601,29 @@ final class EqProcessor {
             left = channelStates[0].low.process(left, coefficients: low)
             left = channelStates[0].mid.process(left, coefficients: mid)
             left = channelStates[0].high.process(left, coefficients: high)
-            captureBuffer[leftIndex] = left * gain
+            let leftLowPass = channelStates[0].filterLowPass.process(left, coefficients: filterLowPass)
+            let leftHighPass = channelStates[0].filterHighPass.process(left, coefficients: filterHighPass)
+            left = DSPKernel.applyFilterMacro(
+                sample: left,
+                lowPassSample: leftLowPass,
+                highPassSample: leftHighPass,
+                wet: filterWet,
+                lowPassBlend: filterLowPassBlend,
+                highPassBlend: filterHighPassBlend,
+                character: filterCharacter
+            )
+            left *= gain
+            left = processEchoSample(
+                dry: left,
+                delayedBuffer: &echoLeftBuffer,
+                wet: echoWet,
+                feedback: echoFeedback,
+                targetDelaySamples: echoDelayTarget,
+                frameOffset: frame
+            )
+            let leftLimited = DSPKernel.softLimit(left, ceiling: ceiling)
+            captureBuffer[leftIndex] = leftLimited.sample
+            clipDetected = clipDetected || leftLimited.clipped
             outputPeak = max(outputPeak, abs(captureBuffer[leftIndex]))
 
             var right = captureBuffer[rightIndex]
@@ -589,9 +631,46 @@ final class EqProcessor {
             right = channelStates[1].low.process(right, coefficients: low)
             right = channelStates[1].mid.process(right, coefficients: mid)
             right = channelStates[1].high.process(right, coefficients: high)
-            captureBuffer[rightIndex] = right * gain
+            let rightLowPass = channelStates[1].filterLowPass.process(right, coefficients: filterLowPass)
+            let rightHighPass = channelStates[1].filterHighPass.process(right, coefficients: filterHighPass)
+            right = DSPKernel.applyFilterMacro(
+                sample: right,
+                lowPassSample: rightLowPass,
+                highPassSample: rightHighPass,
+                wet: filterWet,
+                lowPassBlend: filterLowPassBlend,
+                highPassBlend: filterHighPassBlend,
+                character: filterCharacter
+            )
+            right *= gain
+            right = processEchoSample(
+                dry: right,
+                delayedBuffer: &echoRightBuffer,
+                wet: echoWet,
+                feedback: echoFeedback,
+                targetDelaySamples: echoDelayTarget,
+                frameOffset: frame
+            )
+            let rightLimited = DSPKernel.softLimit(right, ceiling: ceiling)
+            captureBuffer[rightIndex] = rightLimited.sample
+            clipDetected = clipDetected || rightLimited.clipped
             outputPeak = max(outputPeak, abs(captureBuffer[rightIndex]))
+
+            let mono = (captureBuffer[leftIndex] + captureBuffer[rightIndex]) * 0.5
+            analyzerLowState += 0.025 * (mono - analyzerLowState)
+            let highInput = mono - analyzerPreviousSample
+            analyzerHighState += 0.18 * (highInput - analyzerHighState)
+            analyzerPreviousSample = mono
+
+            let lowBand = analyzerLowState
+            let highBand = analyzerHighState
+            let midBand = mono - lowBand - highBand
+            sumSquares += mono * mono
+            lowSum += abs(lowBand)
+            midSum += abs(midBand)
+            highSum += abs(highBand)
         }
+        echoWriteIndex = (echoWriteIndex + Int(frameCount)) % echoBufferCapacity
 
         monitorRingBuffer.write(captureBuffer, count: sampleCount)
         blackHoleRingBuffer.write(captureBuffer, count: sampleCount)
@@ -600,6 +679,23 @@ final class EqProcessor {
         captureCallbacks &+= 1
         lastInputPeak = inputPeak
         lastOutputPeak = outputPeak
+        let frameCountFloat = max(Float(frameCount), 1)
+        let rms = sqrtf(sumSquares / frameCountFloat)
+        lastRMSLevel = min(1, rms * 2.4)
+        lastLowEnergy = min(1, lowSum / frameCountFloat * 3.2)
+        lastMidEnergy = min(1, midSum / frameCountFloat * 4.2)
+        lastHighEnergy = min(1, highSum / frameCountFloat * 6.0)
+        lastTransient = min(1, max(0, outputPeak - analyzerPreviousPeak) * 4.5)
+        analyzerPreviousPeak = outputPeak
+        if clipDetected {
+            lastClipDetected = true
+            clipHoldCallbacks = 24
+        } else if clipHoldCallbacks > 0 {
+            clipHoldCallbacks -= 1
+            lastClipDetected = true
+        } else {
+            lastClipDetected = false
+        }
         lock.unlock()
         return noErr
     }
@@ -635,73 +731,131 @@ final class EqProcessor {
     }
 
     private func recalculateCoefficients() {
-        let rate = Float(sampleRate)
-        lowCoefficients = makeLowShelf(frequency: 120, gainDB: mappedGain(bandValues["low"] ?? 50), sampleRate: rate)
-        midCoefficients = makePeaking(frequency: 1_000, gainDB: mappedGain(bandValues["mid"] ?? 50), q: 0.85, sampleRate: rate)
-        highCoefficients = makeHighShelf(frequency: 8_000, gainDB: mappedGain(bandValues["high"] ?? 50), sampleRate: rate)
+        let config = DSPKernel.configuration(for: controlState, sampleRate: Float(sampleRate))
+        lowCoefficients = config.low
+        midCoefficients = config.mid
+        highCoefficients = config.high
+        filterLowPassCoefficients = config.filterLowPass
+        filterHighPassCoefficients = config.filterHighPass
+        outputGain = config.outputGain
+        limiterCeiling = config.limiterCeiling
+        filterWet = config.filterWet
+        filterLowPassBlend = config.filterLowPassBlend
+        filterHighPassBlend = config.filterHighPassBlend
+        filterCharacter = config.filterCharacter
+        echoWet = config.echoWet
+        echoFeedback = config.echoFeedback
+        echoDelaySamplesTarget = max(1, min(echoBufferCapacity - 1, Int((config.echoDelaySeconds * Float(sampleRate)).rounded())))
     }
 
-    private func mappedGain(_ value: Int) -> Float {
-        (Float(value - 50) / 50) * 18
-    }
-
-    private func makePeaking(frequency: Float, gainDB: Float, q: Float, sampleRate: Float) -> BiquadCoefficients {
-        let a = pow(10, gainDB / 40)
-        let w0 = 2 * Float.pi * frequency / sampleRate
-        let alpha = sin(w0) / (2 * q)
-        let cosW0 = cos(w0)
-        return normalize(
-            b0: 1 + alpha * a,
-            b1: -2 * cosW0,
-            b2: 1 - alpha * a,
-            a0: 1 + alpha / a,
-            a1: -2 * cosW0,
-            a2: 1 - alpha / a
+    private func makeResponse(
+        bank: SurfaceBank,
+        route: SurfaceRoute,
+        parameter: SurfaceParameter,
+        secondaryParameter: SurfaceParameter? = nil
+    ) -> Response {
+        lock.lock()
+        let captureCallbacks = self.captureCallbacks
+        let outputCallbacks = self.outputCallbacks
+        let inputPeak = self.lastInputPeak
+        let outputPeak = self.lastOutputPeak
+        let rmsLevel = self.lastRMSLevel
+        let lowEnergy = self.lastLowEnergy
+        let midEnergy = self.lastMidEnergy
+        let highEnergy = self.lastHighEnergy
+        let transient = self.lastTransient
+        let clipDetected = self.lastClipDetected
+        let displayValue = controlState.displayValue(for: bank, route: route, parameter: parameter)
+        let value = controlState.normalizedValue(for: bank, route: route, parameter: parameter)
+        let parameterLabel = controlState.descriptor(for: bank, route: route, parameter: parameter).label
+        let secondaryValue = secondaryParameter.map { controlState.normalizedValue(for: bank, route: route, parameter: $0) }
+        let secondaryDisplayValue = secondaryParameter.map { controlState.displayValue(for: bank, route: route, parameter: $0) }
+        let secondaryParameterLabel = secondaryParameter.map { controlState.descriptor(for: bank, route: route, parameter: $0).label }
+        lock.unlock()
+        let stats = String(
+            format: "cap=%llu out=%llu in=%.4f out=%.4f",
+            captureCallbacks,
+            outputCallbacks,
+            inputPeak,
+            outputPeak
+        )
+        return Response(
+            ok: true,
+            connected: true,
+            backend: "native-eq",
+            detail: "\(detail) · \(stats)",
+            bank: bank,
+            route: route,
+            parameter: parameter,
+            value: value,
+            displayValue: displayValue,
+            parameterLabel: parameterLabel,
+            secondaryParameter: secondaryParameter,
+            secondaryValue: secondaryValue,
+            secondaryDisplayValue: secondaryDisplayValue,
+            secondaryParameterLabel: secondaryParameterLabel,
+            outputPeak: outputPeak,
+            rmsLevel: rmsLevel,
+            lowEnergy: lowEnergy,
+            midEnergy: midEnergy,
+            highEnergy: highEnergy,
+            transient: transient,
+            clipDetected: clipDetected
         )
     }
 
-    private func makeLowShelf(frequency: Float, gainDB: Float, sampleRate: Float) -> BiquadCoefficients {
-        let a = pow(10, gainDB / 40)
-        let w0 = 2 * Float.pi * frequency / sampleRate
-        let cosW0 = cos(w0)
-        let sinW0 = sin(w0)
-        let sqrtA = sqrt(a)
-        let alpha = sinW0 / 2 * sqrt(2)
-        return normalize(
-            b0: a * ((a + 1) - (a - 1) * cosW0 + 2 * sqrtA * alpha),
-            b1: 2 * a * ((a - 1) - (a + 1) * cosW0),
-            b2: a * ((a + 1) - (a - 1) * cosW0 - 2 * sqrtA * alpha),
-            a0: (a + 1) + (a - 1) * cosW0 + 2 * sqrtA * alpha,
-            a1: -2 * ((a - 1) + (a + 1) * cosW0),
-            a2: (a + 1) + (a - 1) * cosW0 - 2 * sqrtA * alpha
+    private func makeErrorResponse(
+        _ error: Error,
+        bank: SurfaceBank,
+        route: SurfaceRoute,
+        parameter: SurfaceParameter,
+        secondaryParameter: SurfaceParameter? = nil
+    ) -> Response {
+        Response(
+            ok: false,
+            connected: false,
+            backend: "native-eq",
+            detail: error.localizedDescription,
+            bank: bank,
+            route: route,
+            parameter: parameter,
+            value: controlState.normalizedValue(for: bank, route: route, parameter: parameter),
+            displayValue: controlState.displayValue(for: bank, route: route, parameter: parameter),
+            parameterLabel: controlState.descriptor(for: bank, route: route, parameter: parameter).label,
+            secondaryParameter: secondaryParameter,
+            secondaryValue: secondaryParameter.map { controlState.normalizedValue(for: bank, route: route, parameter: $0) },
+            secondaryDisplayValue: secondaryParameter.map { controlState.displayValue(for: bank, route: route, parameter: $0) },
+            secondaryParameterLabel: secondaryParameter.map { controlState.descriptor(for: bank, route: route, parameter: $0).label },
+            outputPeak: lastOutputPeak,
+            rmsLevel: lastRMSLevel,
+            lowEnergy: lastLowEnergy,
+            midEnergy: lastMidEnergy,
+            highEnergy: lastHighEnergy,
+            transient: lastTransient,
+            clipDetected: lastClipDetected
         )
     }
 
-    private func makeHighShelf(frequency: Float, gainDB: Float, sampleRate: Float) -> BiquadCoefficients {
-        let a = pow(10, gainDB / 40)
-        let w0 = 2 * Float.pi * frequency / sampleRate
-        let cosW0 = cos(w0)
-        let sinW0 = sin(w0)
-        let sqrtA = sqrt(a)
-        let alpha = sinW0 / 2 * sqrt(2)
-        return normalize(
-            b0: a * ((a + 1) + (a - 1) * cosW0 + 2 * sqrtA * alpha),
-            b1: -2 * a * ((a - 1) + (a + 1) * cosW0),
-            b2: a * ((a + 1) + (a - 1) * cosW0 - 2 * sqrtA * alpha),
-            a0: (a + 1) - (a - 1) * cosW0 + 2 * sqrtA * alpha,
-            a1: 2 * ((a - 1) - (a + 1) * cosW0),
-            a2: (a + 1) - (a - 1) * cosW0 - 2 * sqrtA * alpha
-        )
-    }
+    private func processEchoSample(
+        dry: Float,
+        delayedBuffer: inout [Float],
+        wet: Float,
+        feedback: Float,
+        targetDelaySamples: Int,
+        frameOffset: Int
+    ) -> Float {
+        if echoDelaySamplesCurrent != targetDelaySamples {
+            let delta = targetDelaySamples - echoDelaySamplesCurrent
+            let stepMagnitude = min(abs(delta), 8)
+            echoDelaySamplesCurrent += delta > 0 ? stepMagnitude : -stepMagnitude
+        }
 
-    private func normalize(b0: Float, b1: Float, b2: Float, a0: Float, a1: Float, a2: Float) -> BiquadCoefficients {
-        BiquadCoefficients(
-            b0: b0 / a0,
-            b1: b1 / a0,
-            b2: b2 / a0,
-            a1: a1 / a0,
-            a2: a2 / a0
-        )
+        let writeIndex = (echoWriteIndex + frameOffset) % echoBufferCapacity
+        let readIndex = (writeIndex - echoDelaySamplesCurrent + echoBufferCapacity) % echoBufferCapacity
+        let delayed = delayedBuffer[readIndex]
+        let send: Float = wet > 0.001 ? 1 : 0
+        delayedBuffer[writeIndex] = dry * send + delayed * feedback
+        return dry + delayed * wet
     }
 
     private func check(_ status: OSStatus) throws {
@@ -758,7 +912,7 @@ installSignalHandlers()
 
 while let line = readLine() {
     guard let data = line.data(using: .utf8) else {
-        writeResponse(Response(ok: false, connected: false, backend: "native-eq", detail: "Invalid UTF-8 input", band: nil, value: nil))
+        writeResponse(Response(ok: false, connected: false, backend: "native-eq", detail: "Invalid UTF-8 input"))
         continue
     }
 
@@ -766,26 +920,42 @@ while let line = readLine() {
         let command = try decoder.decode(Command.self, from: data)
         switch command.action {
         case "status":
-            writeResponse(processor.status(for: command.band))
-        case "setBand":
-            guard let band = command.band, let value = command.value else {
-                writeResponse(Response(ok: false, connected: false, backend: "native-eq", detail: "Missing band or value", band: command.band, value: command.value))
+            guard let bank = command.bank, let route = command.route, let parameter = command.parameter else {
+                writeResponse(Response(ok: false, connected: false, backend: "native-eq", detail: "Missing bank, route, or parameter"))
                 continue
             }
-            writeResponse(processor.setBand(band, value: value))
-        case "getVolume":
-            writeResponse(processor.getOutputVolume())
-        case "setVolume":
-            guard let value = command.value else {
-                writeResponse(Response(ok: false, connected: false, backend: "native-eq", detail: "Missing volume value", band: nil, value: nil))
+            writeResponse(processor.status(for: bank, route: route, parameter: parameter, secondaryParameter: command.secondaryParameter))
+        case "set":
+            guard let bank = command.bank, let route = command.route, let parameter = command.parameter, let value = command.value else {
+                writeResponse(Response(ok: false, connected: false, backend: "native-eq", detail: "Missing bank, route, parameter, or value"))
                 continue
             }
-            writeResponse(processor.setOutputVolume(value))
+            writeResponse(processor.setValue(value, for: bank, route: route, parameter: parameter, secondaryParameter: command.secondaryParameter))
+        case "gesture":
+            guard
+                let bank = command.bank,
+                let route = command.route,
+                let value = command.value,
+                let secondaryParameter = command.secondaryParameter,
+                let secondaryValue = command.secondaryValue
+            else {
+                writeResponse(Response(ok: false, connected: false, backend: "native-eq", detail: "Missing bank, route, value, secondaryParameter, or secondaryValue"))
+                continue
+            }
+            writeResponse(
+                processor.setGesture(
+                    primaryValue: value,
+                    secondaryValue: secondaryValue,
+                    for: bank,
+                    route: route,
+                    secondaryParameter: secondaryParameter
+                )
+            )
         default:
-            writeResponse(Response(ok: false, connected: false, backend: "native-eq", detail: "Unknown action: \(command.action)", band: command.band, value: command.value))
+            writeResponse(Response(ok: false, connected: false, backend: "native-eq", detail: "Unknown action: \(command.action)", bank: command.bank, route: command.route, parameter: command.parameter, value: command.value))
         }
     } catch {
-        writeResponse(Response(ok: false, connected: false, backend: "native-eq", detail: error.localizedDescription, band: nil, value: nil))
+        writeResponse(Response(ok: false, connected: false, backend: "native-eq", detail: error.localizedDescription))
     }
 }
 
