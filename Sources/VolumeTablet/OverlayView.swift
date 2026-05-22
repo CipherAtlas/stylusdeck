@@ -691,7 +691,11 @@ final class ControlSurfaceView: NSView {
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         guard settingsPanelVisible else {
-            return super.hitTest(point)
+            guard bounds.contains(point) else { return nil }
+            guard let hitView = super.hitTest(point), hitView != self else {
+                return self
+            }
+            return actionableControl(containing: hitView) ?? self
         }
 
         if let hitView = super.hitTest(point) {
@@ -1242,7 +1246,13 @@ final class ControlSurfaceView: NSView {
             x: bounds.width - paddingX - navStack.frame.width,
             y: bounds.height - paddingY - navStack.frame.height
         )
-        clipBadgeLabel.frame = NSRect(x: bounds.width - paddingX - 72, y: actionsStack.frame.minY + 4, width: 56, height: 22)
+        let clipBadgeSize = NSSize(width: 72, height: 22)
+        clipBadgeLabel.frame = NSRect(
+            x: bounds.midX - clipBadgeSize.width / 2,
+            y: actionsStack.frame.midY - clipBadgeSize.height / 2,
+            width: clipBadgeSize.width,
+            height: clipBadgeSize.height
+        )
 
         let panelWidth = min(max(bounds.width * 0.24, 280), 360)
         let panelHeight: CGFloat = 404
@@ -1348,7 +1358,7 @@ final class ControlSurfaceView: NSView {
             context.drawRadialGradient(
                 radialGradient,
                 startCenter: CGPoint(x: bounds.width * 0.12, y: bounds.height * 0.16),
-                startRadius: 20,
+                startRadius: 0,
                 endCenter: CGPoint(x: bounds.width * 0.12, y: bounds.height * 0.16),
                 endRadius: min(bounds.width, bounds.height) * 0.42,
                 options: []
@@ -1363,7 +1373,7 @@ final class ControlSurfaceView: NSView {
             context.drawRadialGradient(
                 highlightGradient,
                 startCenter: CGPoint(x: bounds.width * 0.88, y: bounds.height * 0.88),
-                startRadius: 10,
+                startRadius: 0,
                 endCenter: CGPoint(x: bounds.width * 0.88, y: bounds.height * 0.88),
                 endRadius: min(bounds.width, bounds.height) * 0.24,
                 options: []
@@ -1695,8 +1705,30 @@ final class ControlSurfaceView: NSView {
     }
 
     private func isPointInsideInteractiveControl(_ point: CGPoint) -> Bool {
-        guard let hitView = hitTest(point) else { return false }
-        return hitView is NSControl || hitView.superview is NSControl
+        guard let hitView = super.hitTest(point) else { return false }
+        return actionableControl(containing: hitView) != nil
+    }
+
+    private func actionableControl(containing view: NSView) -> NSView? {
+        var current: NSView? = view
+        while let candidate = current, candidate != self {
+            if isActionableControl(candidate) {
+                return candidate
+            }
+            current = candidate.superview
+        }
+        return nil
+    }
+
+    private func isActionableControl(_ view: NSView) -> Bool {
+        switch view {
+        case is NSTextField:
+            return false
+        case is NSButton, is NSPopUpButton, is NSSlider:
+            return true
+        default:
+            return false
+        }
     }
 
     private func isPointInsideSettingsPanel(_ point: CGPoint) -> Bool {

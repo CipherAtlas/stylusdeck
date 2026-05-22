@@ -15,6 +15,7 @@ LAUNCHER_PATH="$MACOS_DIR/$APP_NAME"
 ICON_SOURCE="$REPO_ROOT/assets/brand/stylusdeck-mark.png"
 ICONSET_DIR="$RESOURCES_DIR/AppIcon.iconset"
 ICON_PATH="$RESOURCES_DIR/AppIcon.icns"
+ICON_BASE="$RESOURCES_DIR/AppIconBase.png"
 
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 
@@ -89,10 +90,65 @@ if [[ -f "$ICON_SOURCE" ]]; then
   rm -rf "$ICONSET_DIR"
   mkdir -p "$ICONSET_DIR"
 
+  python3 - "$ICON_SOURCE" "$ICON_BASE" <<'PY'
+import sys
+from PIL import Image, ImageDraw, ImageFilter
+
+source_path, output_path = sys.argv[1], sys.argv[2]
+size = 1024
+radius = 228
+
+mark = Image.open(source_path).convert("RGBA")
+bbox = mark.getbbox()
+if bbox is not None:
+    mark = mark.crop(bbox)
+
+canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+mask = Image.new("L", (size, size), 0)
+draw_mask = ImageDraw.Draw(mask)
+draw_mask.rounded_rectangle((0, 0, size - 1, size - 1), radius=radius, fill=255)
+
+background = Image.new("RGBA", (size, size), (7, 16, 24, 255))
+bg_pixels = background.load()
+for y in range(size):
+    ratio = y / (size - 1)
+    for x in range(size):
+        radial = max(0, 1 - (((x - size * 0.5) / (size * 0.58)) ** 2 + ((y - size * 0.58) / (size * 0.52)) ** 2))
+        r = int(7 + ratio * 7 + radial * 8)
+        g = int(16 + ratio * 18 + radial * 42)
+        b = int(24 + ratio * 30 + radial * 50)
+        bg_pixels[x, y] = (r, g, b, 255)
+
+glow = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+glow_draw = ImageDraw.Draw(glow)
+glow_draw.ellipse((190, 245, 834, 895), fill=(67, 210, 232, 88))
+glow = glow.filter(ImageFilter.GaussianBlur(90))
+background.alpha_composite(glow)
+
+tile = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+tile.alpha_composite(background)
+
+inner_shadow = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+shadow_draw = ImageDraw.Draw(inner_shadow)
+shadow_draw.rounded_rectangle((24, 24, size - 25, size - 25), radius=radius - 32, outline=(255, 255, 255, 34), width=3)
+tile.alpha_composite(inner_shadow)
+
+target = 690
+scale = min(target / mark.width, target / mark.height)
+mark = mark.resize((int(mark.width * scale), int(mark.height * scale)), Image.Resampling.LANCZOS)
+x = (size - mark.width) // 2
+y = int((size - mark.height) * 0.49)
+tile.alpha_composite(mark, (x, y))
+
+canvas.alpha_composite(tile)
+canvas.putalpha(mask)
+canvas.save(output_path)
+PY
+
   make_icon() {
     local size="$1"
     local name="$2"
-    /usr/bin/sips -z "$size" "$size" "$ICON_SOURCE" --out "$ICONSET_DIR/$name" >/dev/null
+    /usr/bin/sips -z "$size" "$size" "$ICON_BASE" --out "$ICONSET_DIR/$name" >/dev/null
   }
 
   make_icon 16 icon_16x16.png

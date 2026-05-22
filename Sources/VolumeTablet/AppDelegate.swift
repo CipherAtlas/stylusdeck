@@ -16,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         rebuildWindows()
         controller.start()
         installKeyMonitor()
+        presentWindowsAfterLaunch()
 
         NotificationCenter.default.addObserver(
             self,
@@ -27,6 +28,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         true
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        bringWindowsForward(forceOrder: true)
+        return true
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -71,7 +77,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             windows = [window]
         }
 
-        activateAllWindows()
+        bringWindowsForward(forceOrder: false)
     }
 
     private func prioritizedScreens() -> [NSScreen] {
@@ -91,9 +97,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         return NSScreen.screens.first { NSMouseInRect(mouseLocation, $0.frame, false) }
     }
 
-    private func activateAllWindows() {
+    private func presentWindowsAfterLaunch() {
+        DispatchQueue.main.async { [weak self] in
+            self?.bringWindowsForward(forceOrder: true)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            self?.bringWindowsForward(forceOrder: true)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+            self?.bringWindowsForward(forceOrder: true)
+        }
+    }
+
+    private func bringWindowsForward(forceOrder: Bool) {
         for window in windows {
+            window.level = .normal
             window.makeKeyAndOrderFront(nil)
+            if forceOrder {
+                window.orderFrontRegardless()
+            }
         }
 
         NSRunningApplication.current.activate(options: [.activateAllWindows])
@@ -102,7 +124,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func toggleFullscreen() {
         guard let window = windows.first else { return }
-        activateAllWindows()
+        bringWindowsForward(forceOrder: true)
         window.toggleFullScreen(nil)
     }
 
